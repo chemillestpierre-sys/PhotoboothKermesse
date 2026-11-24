@@ -53,11 +53,6 @@ export async function composePhotoBlob(
   ctx.rect(0, 0, PHOTO_WIDTH, IMAGE_AREA_HEIGHT);
   ctx.clip();
 
-  if (settings.mirrorEffect) {
-    ctx.translate(PHOTO_WIDTH, 0);
-    ctx.scale(-1, 1);
-  }
-
   ctx.drawImage(
     video,
     sx,

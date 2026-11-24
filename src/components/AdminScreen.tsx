@@ -4,7 +4,6 @@ import {
   Camera,
   Check,
   CheckCircle2,
-  FlipHorizontal2,
   Images,
   Minus,
   Plus,
@@ -16,7 +15,7 @@ import {
   WifiOff,
   X,
 } from 'lucide-react';
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useOfflineReady} from '../hooks/usePWAInstall';
 import {
   clearAllPhotos,
@@ -62,6 +61,13 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
   const [pinError, setPinError] = useState('');
   const [savedNotice, setSavedNotice] = useState(false);
 
+  // Available cameras enumeration
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>(
+    [],
+  );
+  const [loadingCameras, setLoadingCameras] = useState(false);
+  const [cameraListError, setCameraListError] = useState('');
+
   const {isOfflineReady, checking: checkingOffline, refresh: refreshOffline} =
     useOfflineReady();
 
@@ -94,6 +100,55 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
   useEffect(() => {
     setDraft(settings);
   }, [settings]);
+
+  const refreshCameras = useCallback(async (requestPermission = false) => {
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.mediaDevices ||
+      !navigator.mediaDevices.enumerateDevices
+    ) {
+      setCameraListError(
+        'La détection des caméras n’est pas prise en charge par ce navigateur.',
+      );
+      return;
+    }
+
+    setLoadingCameras(true);
+    setCameraListError('');
+    try {
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      let videoInputs = devices.filter((d) => d.kind === 'videoinput');
+
+      const hasLabels = videoInputs.some((d) => Boolean(d.label));
+      if (requestPermission && !hasLabels && navigator.mediaDevices.getUserMedia) {
+        try {
+          const tempStream = await navigator.mediaDevices.getUserMedia({
+            video: {facingMode: {ideal: 'environment'}},
+            audio: false,
+          });
+          tempStream.getTracks().forEach((t) => t.stop());
+          devices = await navigator.mediaDevices.enumerateDevices();
+          videoInputs = devices.filter((d) => d.kind === 'videoinput');
+        } catch {
+          setCameraListError(
+            'Autorisez l’accès à la caméra pour afficher le nom de chaque objectif.',
+          );
+        }
+      }
+
+      setAvailableCameras(videoInputs);
+    } catch {
+      setCameraListError('Impossible de lister les caméras disponibles.');
+    } finally {
+      setLoadingCameras(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'settings') {
+      void refreshCameras(false);
+    }
+  }, [activeTab, refreshCameras]);
 
   useEffect(() => {
     onBusyChange?.(isExporting);
@@ -442,28 +497,21 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <div className="text-base font-semibold text-slate-900">
-                    Caméra utilisée
+                    Caméra par défaut
                   </div>
                   <div className="text-sm text-slate-500">
-                    Frontale recommandée quand la tablette fait face aux familles
+                    Caméra arrière recommandée pour photographier les familles
                   </div>
                 </div>
                 <div className="inline-flex rounded-2xl bg-slate-100 p-1">
                   <button
                     type="button"
-                    onClick={() => setDraft({...draft, cameraFacing: 'user'})}
-                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
-                      draft.cameraFacing === 'user'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600'
-                    }`}>
-                    <Camera className="h-4 w-4" />
-                    <span>Frontale</span>
-                  </button>
-                  <button
-                    type="button"
                     onClick={() =>
-                      setDraft({...draft, cameraFacing: 'environment'})
+                      setDraft({
+                        ...draft,
+                        cameraFacing: 'environment',
+                        cameraDeviceId: '',
+                      })
                     }
                     className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
                       draft.cameraFacing === 'environment'
@@ -473,52 +521,109 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
                     <Camera className="h-4 w-4" />
                     <span>Arrière</span>
                   </button>
-                </div>
-              </div>
-
-              {/* Mirror effect */}
-              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-5">
-                <div>
-                  <div className="text-base font-semibold text-slate-900">
-                    Effet miroir
-                  </div>
-                  <div className="text-sm text-slate-500">
-                    Inverse l’image horizontalement (comme un miroir)
-                  </div>
-                </div>
-                <div className="inline-flex rounded-2xl bg-slate-100 p-1">
                   <button
                     type="button"
-                    onClick={() => setDraft({...draft, mirrorEffect: true})}
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        cameraFacing: 'user',
+                        cameraDeviceId: '',
+                      })
+                    }
                     className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
-                      draft.mirrorEffect
+                      draft.cameraFacing === 'user'
                         ? 'bg-white text-slate-900 shadow-sm'
                         : 'text-slate-600'
                     }`}>
-                    <FlipHorizontal2 className="h-4 w-4" />
-                    <span>Oui</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDraft({...draft, mirrorEffect: false})}
-                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
-                      !draft.mirrorEffect
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600'
-                    }`}>
-                    <span>Non</span>
+                    <Camera className="h-4 w-4" />
+                    <span>Frontale</span>
                   </button>
                 </div>
               </div>
 
-              {/* Countdown duration */}
+              {/* Specific camera device selector (for multi-lens rear cameras) */}
+              <div className="border-t border-slate-100 pt-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-base font-semibold text-slate-900">
+                      Objectif / caméra précise
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      Utile si l’appareil possède plusieurs caméras arrière
+                      (grand-angle, ultra grand-angle…)
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void refreshCameras(true)}
+                    disabled={loadingCameras}
+                    className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-slate-100 px-3.5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200 active:scale-95 disabled:opacity-50">
+                    <RefreshCw
+                      className={`h-4 w-4 ${loadingCameras ? 'animate-spin' : ''}`}
+                    />
+                    <span>Détecter les caméras</span>
+                  </button>
+                </div>
+
+                {cameraListError && (
+                  <p className="text-sm font-medium text-amber-700">
+                    {cameraListError}
+                  </p>
+                )}
+
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setDraft({...draft, cameraDeviceId: ''})}
+                    className={`flex w-full min-h-[48px] items-center justify-between rounded-2xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
+                      draft.cameraDeviceId === ''
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}>
+                    <span>
+                      Automatique (
+                      {draft.cameraFacing === 'environment'
+                        ? 'caméra arrière'
+                        : 'caméra frontale'}
+                      )
+                    </span>
+                    {draft.cameraDeviceId === '' && (
+                      <Check className="h-4 w-4 shrink-0" />
+                    )}
+                  </button>
+
+                  {availableCameras.map((cam, index) => {
+                    const selected = draft.cameraDeviceId === cam.deviceId;
+                    const label =
+                      cam.label.trim() || `Caméra détectée ${index + 1}`;
+                    return (
+                      <button
+                        key={cam.deviceId || `cam-${index}`}
+                        type="button"
+                        onClick={() =>
+                          setDraft({...draft, cameraDeviceId: cam.deviceId})
+                        }
+                        className={`flex w-full min-h-[48px] items-center justify-between gap-3 rounded-2xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
+                          selected
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                        }`}>
+                        <span className="truncate">{label}</span>
+                        {selected && <Check className="h-4 w-4 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Countdown duration (including 0s immediate) */}
               <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-5">
                 <div>
                   <div className="text-base font-semibold text-slate-900">
                     Durée du compte à rebours
                   </div>
                   <div className="text-sm text-slate-500">
-                    Secondes avant le déclenchement (par défaut : 3 s)
+                    0 s = déclenchement immédiat sans attente (défaut : 3 s)
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -527,15 +632,20 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
                     onClick={() =>
                       setDraft({
                         ...draft,
-                        countdownSeconds: Math.max(1, draft.countdownSeconds - 1),
+                        countdownSeconds: Math.max(
+                          0,
+                          draft.countdownSeconds - 1,
+                        ),
                       })
                     }
                     aria-label="Diminuer"
                     className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 hover:bg-slate-200 active:scale-95">
                     <Minus className="h-5 w-5" />
                   </button>
-                  <span className="w-16 text-center font-display text-xl font-bold tabular-nums">
-                    {draft.countdownSeconds} s
+                  <span className="min-w-[6.5rem] text-center font-display text-xl font-bold tabular-nums">
+                    {draft.countdownSeconds === 0
+                      ? '0 s (immédiat)'
+                      : `${draft.countdownSeconds} s`}
                   </span>
                   <button
                     type="button"

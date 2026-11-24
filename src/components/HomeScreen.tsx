@@ -1,5 +1,6 @@
 import {Camera, Lock} from 'lucide-react';
 import React, {useEffect, useRef, useState} from 'react';
+import themeLogoUrl from '../assets/images/logo_graines_artistes_1795511260781.jpg';
 import {PWAInstallButton} from './PWAInstallButton';
 
 interface HomeScreenProps {
@@ -143,23 +144,39 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* Central focal anchor */}
       <section className="relative z-10 flex max-w-3xl flex-col items-center text-center">
-        <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-[2rem] bg-[#FF5A36]/12 text-[#FF5A36] sm:h-28 sm:w-28">
-          <Camera className="h-12 w-12 sm:h-14 sm:w-14" strokeWidth={2.2} />
+        {/* School & Kermesse theme logos */}
+        <div className="mb-5 flex items-center justify-center gap-4 sm:mb-7 sm:gap-7">
+          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl bg-white p-2 shadow-sm ring-1 ring-slate-900/8 sm:h-32 sm:w-32 md:h-36 md:w-36">
+            <img
+              src="/logo-ecole.svg"
+              alt="Logo École Saint-Pierre"
+              referrerPolicy="no-referrer"
+              className="h-full w-full object-contain"
+            />
+          </div>
+          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl bg-white p-1.5 shadow-sm ring-1 ring-slate-900/8 sm:h-32 sm:w-32 md:h-36 md:w-36">
+            <img
+              src={themeLogoUrl}
+              alt="Logo du thème Graines d’Artistes 2026.2027"
+              referrerPolicy="no-referrer"
+              className="h-full w-full object-contain"
+            />
+          </div>
         </div>
 
-        <h1 className="font-display text-4xl font-extrabold tracking-tight text-slate-900 text-balance sm:text-6xl md:text-7xl">
+        <h1 className="font-display text-3xl font-extrabold tracking-tight text-slate-900 text-balance sm:text-5xl md:text-6xl">
           Photobooth de la kermesse
         </h1>
 
-        <p className="mt-4 text-lg font-medium text-slate-600 sm:text-2xl">
+        <p className="mt-3 text-base font-medium text-slate-600 sm:mt-4 sm:text-xl">
           École Saint-Pierre · Chemillé-en-Anjou
         </p>
 
         <button
           type="button"
           onClick={onStart}
-          className="mt-10 flex min-h-[88px] items-center justify-center gap-5 rounded-[2rem] bg-[#FF5A36] px-10 py-6 text-2xl font-extrabold text-white shadow-[0_10px_0_0_#C93B1D] transition-all hover:bg-[#F34F2B] active:translate-y-2 active:shadow-[0_2px_0_0_#C93B1D] sm:mt-12 sm:min-h-[104px] sm:px-14 sm:text-4xl whitespace-nowrap">
-          <Camera className="h-9 w-9 shrink-0 sm:h-11 sm:w-11" strokeWidth={2.5} />
+          className="mt-8 flex min-h-[82px] items-center justify-center gap-5 rounded-[2rem] bg-[#FF5A36] px-10 py-5 text-2xl font-extrabold text-white shadow-[0_10px_0_0_#C93B1D] transition-all hover:bg-[#F34F2B] active:translate-y-2 active:shadow-[0_2px_0_0_#C93B1D] sm:mt-10 sm:min-h-[96px] sm:px-14 sm:text-4xl whitespace-nowrap">
+          <Camera className="h-8 w-8 shrink-0 sm:h-10 sm:w-10" strokeWidth={2.5} />
           <span>Prendre une photo</span>
         </button>
       </section>

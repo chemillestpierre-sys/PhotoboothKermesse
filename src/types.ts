@@ -8,8 +8,8 @@ export interface PhotoboothSettings {
   countdownSeconds: number;
   previewTimeoutSeconds: number;
   otherTimeoutSeconds: number;
-  mirrorEffect: boolean;
   cameraFacing: CameraFacing;
+  cameraDeviceId: string;
   adminPin: string;
 }
 

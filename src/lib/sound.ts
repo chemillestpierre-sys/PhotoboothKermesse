@@ -26,18 +26,32 @@ export function playCountdownBeep(isLastSecond: boolean = false): void {
   try {
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
+    const harmonic = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(isLastSecond ? 880 : 660, now);
+
+    const baseFreq = isLastSecond ? 1046.5 : 784;
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(baseFreq, now);
+
+    harmonic.type = 'sine';
+    harmonic.frequency.setValueAtTime(baseFreq * 2, now);
+
+    const harmonicGain = ctx.createGain();
+    harmonicGain.gain.setValueAtTime(0.25, now);
 
     gain.gain.setValueAtTime(0.001, now);
-    gain.gain.exponentialRampToValueAtTime(0.22, now + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    gain.gain.exponentialRampToValueAtTime(0.58, now + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
 
     osc.connect(gain);
+    harmonic.connect(harmonicGain);
+    harmonicGain.connect(gain);
     gain.connect(ctx.destination);
+
     osc.start(now);
-    osc.stop(now + 0.17);
+    harmonic.start(now);
+    osc.stop(now + 0.21);
+    harmonic.stop(now + 0.21);
   } catch {
     // Ignore audio errors on muted devices
   }
@@ -48,34 +62,35 @@ export function playShutterSound(): void {
   if (!ctx) return;
   try {
     const now = ctx.currentTime;
-    // Crisp mechanical shutter click + joyful chime
-    const bufferSize = Math.floor(ctx.sampleRate * 0.06);
+    // Crisp mechanical shutter click
+    const bufferSize = Math.floor(ctx.sampleRate * 0.07);
     const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
-      output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.25));
+      output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.22));
     }
     const noise = ctx.createBufferSource();
     noise.buffer = noiseBuffer;
     const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.28, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    noiseGain.gain.setValueAtTime(0.55, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
     noise.connect(noiseGain);
     noiseGain.connect(ctx.destination);
     noise.start(now);
 
-    const osc = ctx.createOscillator();
-    const toneGain = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(1046.5, now + 0.02);
-    osc.frequency.exponentialRampToValueAtTime(1318.5, now + 0.12);
-    toneGain.gain.setValueAtTime(0.001, now + 0.02);
-    toneGain.gain.exponentialRampToValueAtTime(0.18, now + 0.04);
-    toneGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
-    osc.connect(toneGain);
-    toneGain.connect(ctx.destination);
-    osc.start(now + 0.02);
-    osc.stop(now + 0.25);
+    // Distinct bright two-note shutter confirmation chime
+    const osc1 = ctx.createOscillator();
+    const toneGain1 = ctx.createGain();
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(1174.66, now + 0.015);
+    osc1.frequency.setValueAtTime(1567.98, now + 0.095);
+    toneGain1.gain.setValueAtTime(0.001, now + 0.015);
+    toneGain1.gain.exponentialRampToValueAtTime(0.5, now + 0.035);
+    toneGain1.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    osc1.connect(toneGain1);
+    toneGain1.connect(ctx.destination);
+    osc1.start(now + 0.015);
+    osc1.stop(now + 0.29);
   } catch {
     // Ignore audio errors
   }

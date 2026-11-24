@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <rect width="400" height="400" rx="36" fill="#FFFFFF"/>
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-width="15" style="isolation:isolate">
+    <!-- Row 1: ÉCOLE -->
+    <g transform="translate(-3.5, 10)" opacity="0.9">
+      <!-- É -->
+      <line x1="94" y1="68" x2="108" y2="57" stroke="#E11D48" stroke-width="10"/>
+      <line x1="92" y1="84" x2="92" y2="128" stroke="#E11D48"/>
+      <line x1="92" y1="84" x2="117" y2="84" stroke="#DB2777"/>
+      <line x1="92" y1="106" x2="113" y2="106" stroke="#F43F5E"/>
+      <line x1="92" y1="128" x2="117" y2="128" stroke="#EC4899"/>
+      <!-- C -->
+      <path d="M167 88 A 20 22 0 1 0 167 124" stroke="#F59E0B"/>
+      <!-- O -->
+      <path d="M204 84 A 21 22 0 0 1 204 128" stroke="#1E3A8A"/>
+      <path d="M204 128 A 21 22 0 0 1 204 84" stroke="#0284C7"/>
+      <!-- L -->
+      <line x1="244" y1="84" x2="244" y2="128" stroke="#EAB308"/>
+      <line x1="244" y1="128" x2="270" y2="128" stroke="#84CC16"/>
+      <!-- E -->
+      <line x1="290" y1="84" x2="290" y2="128" stroke="#15803D"/>
+      <line x1="290" y1="84" x2="315" y2="84" stroke="#22C55E"/>
+      <line x1="290" y1="106" x2="311" y2="106" stroke="#16A34A"/>
+      <line x1="290" y1="128" x2="315" y2="128" stroke="#4ADE80"/>
+    </g>
+
+    <!-- Row 2: SAINT -->
+    <g transform="translate(10, 10)" stroke-width="18" opacity="0.9">
+      <!-- S -->
+      <path d="M84 166 C 64 156, 48 166, 52 180 C 56 194, 86 192, 86 208 C 86 222, 62 226, 46 216" stroke="#0EA5E9"/>
+      <!-- A -->
+      <line x1="112" y1="220" x2="132" y2="162" stroke="#6366F1"/>
+      <line x1="152" y1="220" x2="132" y2="162" stroke="#4F46E5"/>
+      <line x1="120" y1="201" x2="144" y2="201" stroke="#8B5CF6"/>
+      <!-- I -->
+      <line x1="184" y1="162" x2="184" y2="220" stroke="#E11D48"/>
+      <!-- N -->
+      <line x1="216" y1="220" x2="216" y2="162" stroke="#F97316"/>
+      <line x1="216" y1="162" x2="256" y2="220" stroke="#F59E0B"/>
+      <line x1="256" y1="220" x2="256" y2="162" stroke="#EA580C"/>
+      <!-- T -->
+      <line x1="282" y1="162" x2="334" y2="162" stroke="#22C55E"/>
+      <line x1="308" y1="162" x2="308" y2="220" stroke="#16A34A"/>
+    </g>
+
+    <!-- Row 3: PIERRE -->
+    <g transform="translate(17, 10)" stroke-width="17" opacity="0.9">
+      <!-- P -->
+      <line x1="34" y1="252" x2="34" y2="310" stroke="#7C3AED"/>
+      <path d="M34 252 L54 252 A 14 14 0 0 1 54 282 L34 282" stroke="#8B5CF6"/>
+      <!-- I -->
+      <line x1="88" y1="252" x2="88" y2="310" stroke="#FACC15"/>
+      <!-- E -->
+      <line x1="120" y1="252" x2="120" y2="310" stroke="#15803D"/>
+      <line x1="120" y1="252" x2="148" y2="252" stroke="#22C55E"/>
+      <line x1="120" y1="281" x2="143" y2="281" stroke="#16A34A"/>
+      <line x1="120" y1="310" x2="148" y2="310" stroke="#4ADE80"/>
+      <!-- R -->
+      <line x1="176" y1="252" x2="176" y2="310" stroke="#E11D48"/>
+      <path d="M176 252 L195 252 A 14 14 0 0 1 195 280 L176 280" stroke="#EC4899"/>
+      <line x1="192" y1="280" x2="210" y2="310" stroke="#DB2777"/>
+      <!-- R -->
+      <line x1="238" y1="252" x2="238" y2="310" stroke="#0284C7"/>
+      <path d="M238 252 L257 252 A 14 14 0 0 1 257 280 L238 280" stroke="#38BDF8"/>
+      <line x1="254" y1="280" x2="272" y2="310" stroke="#1E40AF"/>
+      <!-- E -->
+      <line x1="304" y1="252" x2="304" y2="310" stroke="#15803D"/>
+      <line x1="304" y1="252" x2="332" y2="252" stroke="#22C55E"/>
+      <line x1="304" y1="281" x2="327" y2="281" stroke="#16A34A"/>
+      <line x1="304" y1="310" x2="332" y2="310" stroke="#4ADE80"/>
+    </g>
+  </g>
+</svg>

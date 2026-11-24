@@ -35,6 +35,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [errorKind, setErrorKind] = useState<CameraErrorKind>(null);
+  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isFlashing, setIsFlashing] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -51,6 +52,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     setIsLoading(true);
     setIsReady(false);
     setErrorKind(null);
+    setFallbackNotice(null);
 
     if (
       typeof navigator === 'undefined' ||
@@ -62,17 +64,102 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
       return;
     }
 
+    const highRes = {
+      width: {ideal: 2560},
+      height: {ideal: 1920},
+    };
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: {ideal: settings.cameraFacing},
-          width: {ideal: 1920},
-          height: {ideal: 1440},
-        },
-        audio: false,
-      });
+      let stream: MediaStream;
+      let notice: string | null = null;
+
+      if (settings.cameraDeviceId) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              deviceId: {exact: settings.cameraDeviceId},
+              ...highRes,
+            },
+            audio: false,
+          });
+        } catch (err) {
+          const errName = err instanceof DOMException ? err.name : '';
+          if (
+            errName === 'OverconstrainedError' ||
+            errName === 'NotFoundError'
+          ) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                facingMode: {ideal: settings.cameraFacing},
+                ...highRes,
+              },
+              audio: false,
+            });
+            notice =
+              'Caméra choisie indisponible : autre caméra utilisée.';
+          } else {
+            throw err;
+          }
+        }
+      } else if (settings.cameraFacing === 'environment') {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: {exact: 'environment'},
+              ...highRes,
+            },
+            audio: false,
+          });
+        } catch (err) {
+          const errName = err instanceof DOMException ? err.name : '';
+          if (
+            errName === 'OverconstrainedError' ||
+            errName === 'NotFoundError'
+          ) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: highRes,
+              audio: false,
+            });
+            notice = 'Caméra arrière absente : caméra disponible utilisée.';
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: {ideal: 'user'},
+              ...highRes,
+            },
+            audio: false,
+          });
+        } catch (err) {
+          const errName = err instanceof DOMException ? err.name : '';
+          if (
+            errName === 'OverconstrainedError' ||
+            errName === 'NotFoundError'
+          ) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: highRes,
+              audio: false,
+            });
+            notice = 'Caméra frontale absente : caméra disponible utilisée.';
+          } else {
+            throw err;
+          }
+        }
+      }
+
+      if (!notice && !settings.cameraDeviceId && settings.cameraFacing === 'environment') {
+        const trackFacing = stream.getVideoTracks()[0]?.getSettings().facingMode;
+        if (trackFacing === 'user') {
+          notice = 'Caméra arrière absente : caméra disponible utilisée.';
+        }
+      }
 
       streamRef.current = stream;
+      setFallbackNotice(notice);
       const video = videoRef.current;
       if (video) {
         video.srcObject = stream;
@@ -93,7 +180,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         setErrorKind('permission');
       }
     }
-  }, [settings.cameraFacing, stopStream]);
+  }, [settings.cameraDeviceId, settings.cameraFacing, stopStream]);
 
   useEffect(() => {
     void startCamera();
@@ -106,11 +193,43 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     onBusyChange?.(countdown !== null || isCapturing);
   }, [countdown, isCapturing, onBusyChange]);
 
+  const captureNow = useCallback(() => {
+    setCountdown(null);
+    setIsCapturing(true);
+    setIsFlashing(true);
+    playShutterSound();
+
+    const video = videoRef.current;
+    window.setTimeout(() => {
+      setIsFlashing(false);
+    }, 420);
+
+    if (video) {
+      composePhotoBlob(video, settings)
+        .then((blob) => {
+          window.setTimeout(() => {
+            stopStream();
+            onCaptured(blob);
+          }, 220);
+        })
+        .catch(() => {
+          setIsCapturing(false);
+        });
+    } else {
+      setIsCapturing(false);
+    }
+  }, [onCaptured, settings, stopStream]);
+
   const handleStartCountdown = () => {
     if (!isReady || countdown !== null || isCapturing) return;
     unlockAudio();
 
-    const total = Math.max(1, settings.countdownSeconds);
+    if (settings.countdownSeconds <= 0) {
+      captureNow();
+      return;
+    }
+
+    const total = settings.countdownSeconds;
     setCountdown(total);
     playCountdownBeep(total === 1);
   };
@@ -119,30 +238,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     if (countdown === null) return;
 
     if (countdown <= 0) {
-      setCountdown(null);
-      setIsCapturing(true);
-      setIsFlashing(true);
-      playShutterSound();
-
-      const video = videoRef.current;
-      window.setTimeout(() => {
-        setIsFlashing(false);
-      }, 420);
-
-      if (video) {
-        composePhotoBlob(video, settings)
-          .then((blob) => {
-            window.setTimeout(() => {
-              stopStream();
-              onCaptured(blob);
-            }, 220);
-          })
-          .catch(() => {
-            setIsCapturing(false);
-          });
-      } else {
-        setIsCapturing(false);
-      }
+      captureNow();
       return;
     }
 
@@ -155,7 +251,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     }, 1000);
 
     return () => window.clearTimeout(timer);
-  }, [countdown, onCaptured, settings, stopStream]);
+  }, [captureNow, countdown]);
 
   const renderErrorContent = () => {
     if (errorKind === 'permission') {
@@ -173,7 +269,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         title: 'Aucune caméra détectée',
         steps: [
           'Vérifiez que la tablette dispose bien d’une caméra fonctionnelle.',
-          'Dans l’espace bénévole, vérifiez le choix de caméra (frontale ou arrière).',
+          'Dans l’espace bénévole, vérifiez le choix de caméra (arrière ou frontale).',
           'Appuyez sur « Réessayer » une fois la caméra prête.',
         ],
       };
@@ -199,7 +295,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
 
   return (
     <main className="relative flex h-dvh w-screen flex-col justify-between overflow-hidden bg-slate-950 select-none">
-      {/* Fullscreen live video feed */}
+      {/* Fullscreen live video feed (never mirrored) */}
       <video
         ref={videoRef}
         playsInline
@@ -207,11 +303,11 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         autoPlay
         onLoadedMetadata={() => setIsReady(true)}
         className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
-          settings.mirrorEffect ? '-scale-x-100' : ''
-        } ${isReady && !errorKind ? 'opacity-100' : 'opacity-0'}`}
+          isReady && !errorKind ? 'opacity-100' : 'opacity-0'
+        }`}
       />
 
-      {/* Subtle framing corner guides so families know they're in frame without clutter */}
+      {/* Subtle framing corner guides */}
       {isReady && !errorKind && countdown === null && !isCapturing && (
         <div
           aria-hidden="true"
@@ -225,8 +321,8 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         </div>
       )}
 
-      {/* Top bar: Back button */}
-      <div className="relative z-20 flex items-center justify-between p-4 sm:p-6">
+      {/* Top bar: Back button + discreet fallback notice if rear camera unavailable */}
+      <div className="relative z-20 flex items-start justify-between gap-3 p-4 sm:p-6">
         {countdown === null && !isCapturing ? (
           <button
             type="button"
@@ -240,6 +336,12 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
           </button>
         ) : (
           <div />
+        )}
+
+        {fallbackNotice && isReady && !errorKind && (
+          <div className="rounded-2xl bg-slate-900/65 px-3.5 py-2 text-xs font-medium text-white/90 backdrop-blur-md sm:text-sm">
+            {fallbackNotice}
+          </div>
         )}
       </div>
 
