@@ -225,7 +225,10 @@ export default function App() {
         />
       )}
 
-      <PrintSheet imageUrl={printImageUrl} />
+      <PrintSheet
+        imageUrl={printImageUrl}
+        orientation={settings.photoOrientation}
+      />
     </>
   );
 }

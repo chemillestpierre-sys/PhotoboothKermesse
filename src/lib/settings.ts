@@ -20,6 +20,7 @@ export function getDefaultSettings(): PhotoboothSettings {
     otherTimeoutSeconds: 30,
     cameraFacing: 'environment',
     cameraDeviceId: '',
+    photoOrientation: 'landscape',
     adminPin: '1234',
   };
 }
@@ -63,6 +64,8 @@ export function loadSettings(): PhotoboothSettings {
           typeof parsed.cameraDeviceId === 'string'
             ? parsed.cameraDeviceId
             : '',
+        photoOrientation:
+          parsed.photoOrientation === 'portrait' ? 'portrait' : 'landscape',
         adminPin:
           typeof parsed.adminPin === 'string' &&
           /^\d{4,8}$/.test(parsed.adminPin)
@@ -104,6 +107,7 @@ export function loadSettings(): PhotoboothSettings {
             : defaults.otherTimeoutSeconds,
         cameraFacing: 'environment',
         cameraDeviceId: '',
+        photoOrientation: 'landscape',
         adminPin:
           typeof parsed.adminPin === 'string' &&
           /^\d{4,8}$/.test(parsed.adminPin)

@@ -132,33 +132,49 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
   };
 
   return (
-    <main className="flex h-dvh w-screen flex-col overflow-hidden bg-[#FAF8F4] p-4 select-none sm:p-6 landscape:flex-row landscape:items-center landscape:justify-center landscape:gap-8">
-      {/* Photo display area — maximized in both portrait and landscape */}
-      <div className="flex min-h-0 flex-1 items-center justify-center landscape:h-full landscape:max-w-[65vw]">
+    <main className="app-viewport safe-area-pad flex flex-col overflow-hidden bg-[#FAF8F4] select-none">
+      {/* Photo display area — occupies all remaining flexible space without distortion */}
+      <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center p-1 sm:p-2">
         <button
           type="button"
           onClick={openZoomModal}
           aria-label="Agrandir la photo en plein écran"
-          className="group relative flex h-full max-h-full w-auto max-w-full items-center justify-center focus:outline-none">
-          <img
-            src={photo.url}
-            alt="Votre photo de la kermesse"
-            className="max-h-full max-w-full rounded-2xl bg-white object-contain shadow-[0_14px_40px_rgba(15,23,42,0.14)] ring-1 ring-slate-900/10"
-          />
-          <span className="absolute right-3 bottom-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900/70 text-white backdrop-blur-sm transition group-hover:bg-slate-900">
-            <Maximize2 className="h-5 w-5" />
-          </span>
+          className="group relative flex h-full w-full min-h-0 min-w-0 max-h-full max-w-full items-center justify-center overflow-hidden focus:outline-none">
+          <div className="relative flex h-full w-full min-h-0 min-w-0 items-center justify-center">
+            <img
+              src={photo.url}
+              alt="Votre photo de la kermesse"
+              className="max-h-full max-w-full rounded-2xl bg-white object-contain shadow-[0_12px_36px_rgba(15,23,42,0.14)] ring-1 ring-slate-900/10"
+            />
+            <span className="pointer-events-none absolute right-2 bottom-2 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900/70 text-white backdrop-blur-sm transition group-hover:bg-slate-900 sm:right-3 sm:bottom-3 sm:h-11 sm:w-11">
+              <Maximize2 className="h-4 w-4 sm:h-5 sm:w-5" />
+            </span>
+          </div>
         </button>
       </div>
 
-      {/* Three big tactile action buttons */}
-      <div className="mt-4 flex shrink-0 flex-row items-stretch justify-center gap-3 sm:gap-4 landscape:mt-0 landscape:w-72 landscape:flex-col landscape:gap-5">
+      {/* Three tactile action buttons always anchored at the bottom */}
+      <div className="mx-auto mt-2 grid w-full max-w-4xl shrink-0 grid-cols-3 gap-2 sm:mt-3 sm:gap-4">
         <button
           type="button"
           onClick={onRetry}
-          className="flex flex-1 min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-3xl bg-white px-4 py-3 text-slate-800 shadow-[0_6px_0_0_#CBD5E1] ring-1 ring-slate-200 transition hover:bg-slate-50 active:translate-y-1 active:shadow-[0_2px_0_0_#CBD5E1] sm:min-h-[84px] sm:flex-row sm:gap-3 sm:px-6 landscape:flex-none landscape:min-h-[84px]">
-          <RotateCcw className="h-7 w-7 shrink-0 text-slate-700" strokeWidth={2.4} />
-          <span className="font-display text-lg font-extrabold sm:text-xl whitespace-nowrap">
+          style={{
+            minHeight: 'clamp(3.5rem, 10.5dvh, 5.25rem)',
+            padding:
+              'clamp(0.45rem, 1.3dvh, 0.9rem) clamp(0.35rem, 1.5vw, 1.25rem)',
+          }}
+          className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-white text-slate-800 shadow-[0_5px_0_0_#CBD5E1] ring-1 ring-slate-200 transition hover:bg-slate-50 active:translate-y-1 active:shadow-[0_2px_0_0_#CBD5E1] sm:flex-row sm:gap-2.5 sm:rounded-3xl">
+          <RotateCcw
+            style={{
+              width: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
+              height: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
+            }}
+            className="shrink-0 text-slate-700"
+            strokeWidth={2.4}
+          />
+          <span
+            style={{fontSize: 'clamp(0.78rem, 2.5vmin, 1.25rem)'}}
+            className="font-display font-extrabold whitespace-nowrap">
             Recommencer
           </span>
         </button>
@@ -166,9 +182,23 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
         <button
           type="button"
           onClick={onPrint}
-          className="flex flex-1 min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-3xl bg-[#0EA5E9] px-4 py-3 text-white shadow-[0_6px_0_0_#0369A1] transition hover:bg-[#0284C7] active:translate-y-1 active:shadow-[0_2px_0_0_#0369A1] sm:min-h-[84px] sm:flex-row sm:gap-3 sm:px-6 landscape:flex-none landscape:min-h-[84px]">
-          <Printer className="h-7 w-7 shrink-0" strokeWidth={2.4} />
-          <span className="font-display text-lg font-extrabold sm:text-xl whitespace-nowrap">
+          style={{
+            minHeight: 'clamp(3.5rem, 10.5dvh, 5.25rem)',
+            padding:
+              'clamp(0.45rem, 1.3dvh, 0.9rem) clamp(0.35rem, 1.5vw, 1.25rem)',
+          }}
+          className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-[#0EA5E9] text-white shadow-[0_5px_0_0_#0369A1] transition hover:bg-[#0284C7] active:translate-y-1 active:shadow-[0_2px_0_0_#0369A1] sm:flex-row sm:gap-2.5 sm:rounded-3xl">
+          <Printer
+            style={{
+              width: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
+              height: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
+            }}
+            className="shrink-0"
+            strokeWidth={2.4}
+          />
+          <span
+            style={{fontSize: 'clamp(0.78rem, 2.5vmin, 1.25rem)'}}
+            className="font-display font-extrabold whitespace-nowrap">
             Imprimer
           </span>
         </button>
@@ -176,9 +206,23 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
         <button
           type="button"
           onClick={onFinish}
-          className="flex flex-1 min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-3xl bg-[#10B981] px-4 py-3 text-white shadow-[0_6px_0_0_#047857] transition hover:bg-[#059669] active:translate-y-1 active:shadow-[0_2px_0_0_#047857] sm:min-h-[84px] sm:flex-row sm:gap-3 sm:px-6 landscape:flex-none landscape:min-h-[84px]">
-          <Check className="h-7 w-7 shrink-0" strokeWidth={2.8} />
-          <span className="font-display text-lg font-extrabold sm:text-xl whitespace-nowrap">
+          style={{
+            minHeight: 'clamp(3.5rem, 10.5dvh, 5.25rem)',
+            padding:
+              'clamp(0.45rem, 1.3dvh, 0.9rem) clamp(0.35rem, 1.5vw, 1.25rem)',
+          }}
+          className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-[#10B981] text-white shadow-[0_5px_0_0_#047857] transition hover:bg-[#059669] active:translate-y-1 active:shadow-[0_2px_0_0_#047857] sm:flex-row sm:gap-2.5 sm:rounded-3xl">
+          <Check
+            style={{
+              width: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
+              height: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
+            }}
+            className="shrink-0"
+            strokeWidth={2.8}
+          />
+          <span
+            style={{fontSize: 'clamp(0.78rem, 2.5vmin, 1.25rem)'}}
+            className="font-display font-extrabold whitespace-nowrap">
             Terminer
           </span>
         </button>
@@ -202,11 +246,17 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
                   ? 'transform 150ms ease-out'
                   : 'none',
             }}
-            className="max-h-[96dvh] max-w-[96vw] select-none object-contain"
+            className="max-h-[94dvh] max-w-[96vw] select-none object-contain"
           />
 
-          <div className="pointer-events-none fixed inset-x-0 top-0 flex items-center justify-between p-4 sm:p-6">
-            <div className="inline-flex items-center gap-2 rounded-2xl bg-slate-900/75 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-md">
+          <div
+            style={{
+              paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+              paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+              paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
+            }}
+            className="pointer-events-none fixed inset-x-0 top-0 flex items-center justify-between gap-2">
+            <div className="inline-flex items-center gap-2 rounded-2xl bg-slate-900/75 px-3.5 py-2 text-xs font-medium text-white backdrop-blur-md sm:text-sm">
               <ZoomIn className="h-4 w-4 shrink-0" />
               <span>Écartez les doigts pour zoomer</span>
             </div>
@@ -214,7 +264,7 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
             <button
               type="button"
               onClick={closeZoomModal}
-              className="pointer-events-auto inline-flex min-h-[52px] items-center gap-2 rounded-2xl bg-white px-5 py-3 text-base font-bold text-slate-900 shadow-lg transition active:scale-95">
+              className="pointer-events-auto inline-flex min-h-[48px] items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-bold text-slate-900 shadow-lg transition active:scale-95 sm:text-base">
               <X className="h-5 w-5" />
               <span>Fermer</span>
             </button>

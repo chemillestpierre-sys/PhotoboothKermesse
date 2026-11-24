@@ -28,7 +28,8 @@ export default defineConfig(() => {
             "Photobooth hors ligne pour la kermesse de l'École Saint-Pierre à Chemillé-en-Anjou.",
           theme_color: '#FAF8F4',
           background_color: '#FAF8F4',
-          display: 'standalone',
+          display: 'fullscreen',
+          display_override: ['fullscreen', 'standalone'],
           start_url: '/',
           scope: '/',
           icons: [

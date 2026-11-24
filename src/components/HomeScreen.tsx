@@ -67,14 +67,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const strokeDashoffset = circumference * (1 - holdProgress);
 
   return (
-    <main className="relative flex h-dvh w-screen flex-col items-center justify-between overflow-hidden bg-[#FAF8F4] px-6 py-8 select-none sm:px-12 sm:py-10">
+    <main className="app-viewport safe-area-pad relative flex flex-col items-center justify-between select-none">
       {/* Joyful minimal top bunting geometry (crisp, non-distracting) */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 flex justify-center overflow-hidden opacity-90">
         <svg
           viewBox="0 0 1200 64"
-          className="h-10 w-full max-w-6xl sm:h-12"
+          className="h-7 w-full max-w-6xl sm:h-11"
           preserveAspectRatio="none">
           <path
             d="M0 4 Q 300 42 600 10 Q 900 42 1200 4"
@@ -94,8 +94,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </div>
 
       {/* Top corner row: discreet install button on left (hidden once installed) + 3s long-press admin corner on right */}
-      <div className="relative z-20 flex w-full items-start justify-between">
-        <div className="pt-2">
+      <div className="relative z-20 flex w-full shrink-0 items-start justify-between">
+        <div className="pt-1">
           <PWAInstallButton variant="discreet" />
         </div>
 
@@ -108,10 +108,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           onContextMenu={(e) => e.preventDefault()}
           aria-label="Espace bénévole (maintenir 3 secondes)"
           title="Maintenir 3 secondes pour accéder à l'espace bénévole"
-          className="relative flex h-16 w-16 touch-none items-center justify-center rounded-2xl text-slate-400 transition-opacity focus:outline-none">
+          className="relative flex h-12 w-12 touch-none items-center justify-center rounded-2xl text-slate-400 transition-opacity focus:outline-none sm:h-14 sm:w-14">
           {isHolding && (
             <svg
-              className="absolute inset-0 h-16 w-16 -rotate-90"
+              className="absolute inset-0 h-full w-full -rotate-90"
               viewBox="0 0 48 48">
               <circle
                 cx="24"
@@ -142,11 +142,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </button>
       </div>
 
-      {/* Central focal anchor */}
-      <section className="relative z-10 flex max-w-3xl flex-col items-center text-center">
+      {/* Central focal anchor occupying remaining flexible space */}
+      <section className="relative z-10 flex min-h-0 w-full max-w-3xl flex-1 flex-col items-center justify-center gap-[clamp(0.4rem,1.8dvh,1.25rem)] px-2 text-center">
         {/* School & Kermesse theme logos */}
-        <div className="mb-5 flex items-center justify-center gap-4 sm:mb-7 sm:gap-7">
-          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl bg-white p-2 shadow-sm ring-1 ring-slate-900/8 sm:h-32 sm:w-32 md:h-36 md:w-36">
+        <div className="flex shrink-0 items-center justify-center gap-[clamp(0.75rem,3vw,1.75rem)]">
+          <div
+            style={{
+              width: 'clamp(3.75rem, 16dvh, 8.75rem)',
+              height: 'clamp(3.75rem, 16dvh, 8.75rem)',
+            }}
+            className="flex items-center justify-center overflow-hidden rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-slate-900/8 sm:rounded-3xl sm:p-2">
             <img
               src="/logo-ecole.svg"
               alt="Logo École Saint-Pierre"
@@ -154,7 +159,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               className="h-full w-full object-contain"
             />
           </div>
-          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl bg-white p-1.5 shadow-sm ring-1 ring-slate-900/8 sm:h-32 sm:w-32 md:h-36 md:w-36">
+          <div
+            style={{
+              width: 'clamp(3.75rem, 16dvh, 8.75rem)',
+              height: 'clamp(3.75rem, 16dvh, 8.75rem)',
+            }}
+            className="flex items-center justify-center overflow-hidden rounded-2xl bg-white p-1 shadow-sm ring-1 ring-slate-900/8 sm:rounded-3xl sm:p-1.5">
             <img
               src={themeLogoUrl}
               alt="Logo du thème Graines d’Artistes 2026.2027"
@@ -164,27 +174,45 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
         </div>
 
-        <h1 className="font-display text-3xl font-extrabold tracking-tight text-slate-900 text-balance sm:text-5xl md:text-6xl">
+        <h1
+          style={{fontSize: 'clamp(1.35rem, 4.8vmin, 3.75rem)', lineHeight: 1.08}}
+          className="font-display font-extrabold tracking-tight text-slate-900 text-balance">
           Photobooth de la kermesse
         </h1>
 
-        <p className="mt-3 text-base font-medium text-slate-600 sm:mt-4 sm:text-xl">
+        <p
+          style={{fontSize: 'clamp(0.85rem, 2.4vmin, 1.375rem)'}}
+          className="font-medium text-slate-600">
           École Saint-Pierre · Chemillé-en-Anjou
         </p>
 
         <button
           type="button"
           onClick={onStart}
-          className="mt-8 flex min-h-[82px] items-center justify-center gap-5 rounded-[2rem] bg-[#FF5A36] px-10 py-5 text-2xl font-extrabold text-white shadow-[0_10px_0_0_#C93B1D] transition-all hover:bg-[#F34F2B] active:translate-y-2 active:shadow-[0_2px_0_0_#C93B1D] sm:mt-10 sm:min-h-[96px] sm:px-14 sm:text-4xl whitespace-nowrap">
-          <Camera className="h-8 w-8 shrink-0 sm:h-10 sm:w-10" strokeWidth={2.5} />
+          style={{
+            fontSize: 'clamp(1.1rem, 3.5vmin, 2.2rem)',
+            padding:
+              'clamp(0.7rem, 2.1dvh, 1.35rem) clamp(1.35rem, 5vw, 3.25rem)',
+          }}
+          className="mt-1 flex shrink-0 items-center justify-center gap-[clamp(0.6rem,2vw,1.25rem)] rounded-[1.75rem] bg-[#FF5A36] font-extrabold text-white shadow-[0_8px_0_0_#C93B1D] transition-all hover:bg-[#F34F2B] active:translate-y-1.5 active:shadow-[0_2px_0_0_#C93B1D] sm:rounded-[2rem] whitespace-nowrap">
+          <Camera
+            style={{
+              width: 'clamp(1.35rem, 3.8vmin, 2.5rem)',
+              height: 'clamp(1.35rem, 3.8vmin, 2.5rem)',
+            }}
+            className="shrink-0"
+            strokeWidth={2.5}
+          />
           <span>Prendre une photo</span>
         </button>
       </section>
 
       {/* Quiet bottom spacing */}
-      <footer className="relative z-10 pb-2 text-center text-sm font-medium text-slate-500 space-y-1">
+      <footer
+        style={{fontSize: 'clamp(0.68rem, 1.7vmin, 0.875rem)'}}
+        className="relative z-10 shrink-0 space-y-0.5 text-center font-medium text-slate-500">
         <p>Souriez ! Vos photos restent sur la tablette.</p>
-        <p className="text-xs text-slate-500">
+        <p className="opacity-90">
           Application réalisée par Jean-Michel Robineau – robineau.jm@gmail.com
         </p>
       </footer>

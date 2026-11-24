@@ -9,8 +9,10 @@
   html,
   body,
   #root {
-    height: 100%;
+    height: 100vh;
+    height: 100dvh;
     width: 100%;
+    overflow: hidden;
     margin: 0;
     padding: 0;
     font-family: var(--font-sans);
@@ -18,6 +20,7 @@
     color: #1e293b;
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
+    touch-action: manipulation;
   }
 
   h1,
@@ -28,9 +31,23 @@
   }
 }
 
-/* Print stylesheet: 10 x 15 cm borderless photo only */
+.app-viewport {
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+}
+
+.safe-area-pad {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+}
+
+/* Print stylesheet: 15 x 10 cm landscape borderless photo by default */
 @page {
-  size: 10cm 15cm portrait;
+  size: 15cm 10cm;
   margin: 0;
 }
 
@@ -41,8 +58,8 @@
 @media print {
   html,
   body {
-    width: 10cm !important;
-    height: 15cm !important;
+    width: 100% !important;
+    height: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
@@ -59,17 +76,22 @@
     justify-content: center;
     position: fixed !important;
     inset: 0 !important;
-    width: 10cm !important;
-    height: 15cm !important;
+    width: 15cm !important;
+    height: 10cm !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
   }
 
-  #print-photo-root img {
-    display: block !important;
+  #print-photo-root[data-orientation='portrait'] {
     width: 10cm !important;
     height: 15cm !important;
+  }
+
+  #print-photo-root img {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
     object-fit: contain !important;
     page-break-inside: avoid;
   }

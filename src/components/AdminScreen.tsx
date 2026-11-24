@@ -229,18 +229,24 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
   };
 
   return (
-    <div className="flex h-dvh w-screen flex-col overflow-hidden bg-[#FAF8F4] text-slate-900">
+    <div className="app-viewport flex flex-col bg-[#FAF8F4] text-slate-900">
       {/* Top Bar */}
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
-        <div className="flex items-center gap-4">
+      <header
+        style={{
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+          paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+          paddingRight: 'max(1rem, env(safe-area-inset-right))',
+        }}
+        className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white pb-3 sm:pb-4">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex min-h-[48px] items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-base font-bold text-white transition hover:bg-slate-800 active:scale-95 whitespace-nowrap">
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-slate-900 px-3.5 py-2 text-sm font-bold text-white transition hover:bg-slate-800 active:scale-95 whitespace-nowrap sm:min-h-[48px] sm:px-4 sm:text-base">
             <ArrowLeft className="h-5 w-5" />
             <span>Retour au photobooth</span>
           </button>
-          <h1 className="font-display text-2xl font-extrabold text-slate-900 sm:text-3xl">
+          <h1 className="font-display text-xl font-extrabold text-slate-900 sm:text-3xl">
             Espace bénévole
           </h1>
         </div>
@@ -279,12 +285,17 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
       </header>
 
       {/* Navigation tabs */}
-      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-3 sm:px-8">
+      <div
+        style={{
+          paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+          paddingRight: 'max(1rem, env(safe-area-inset-right))',
+        }}
+        className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white py-2.5 sm:py-3">
         <div className="inline-flex rounded-2xl bg-slate-100 p-1">
           <button
             type="button"
             onClick={() => setActiveTab('gallery')}
-            className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-5 py-2 text-base font-bold transition ${
+            className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition sm:px-5 sm:text-base ${
               activeTab === 'gallery'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
@@ -295,7 +306,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('settings')}
-            className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-5 py-2 text-base font-bold transition ${
+            className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition sm:px-5 sm:text-base ${
               activeTab === 'settings'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
@@ -319,7 +330,13 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
       </div>
 
       {/* Main scrollable content */}
-      <div className="flex-1 overflow-y-auto p-5 sm:p-8">
+      <div
+        style={{
+          paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+          paddingRight: 'max(1rem, env(safe-area-inset-right))',
+          paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+        }}
+        className="min-h-0 flex-1 overflow-y-auto pt-4 sm:pt-6">
         {activeTab === 'gallery' ? (
           <div className="mx-auto max-w-6xl space-y-6">
             {/* Gallery summary + bulk actions */}
@@ -380,11 +397,15 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => setLightboxPhoto(photo)}
-                      className="aspect-[2/3] w-full overflow-hidden bg-slate-100 focus:outline-none">
+                      className={`${
+                        settings.photoOrientation === 'portrait'
+                          ? 'aspect-[2/3]'
+                          : 'aspect-[3/2]'
+                      } w-full overflow-hidden bg-slate-100 focus:outline-none`}>
                       <img
                         src={photo.url}
                         alt={`Photo prise à ${formatTime(photo.createdAt)}`}
-                        className="h-full w-full object-cover transition hover:scale-[1.02]"
+                        className="h-full w-full object-contain transition hover:scale-[1.02]"
                       />
                     </button>
 
@@ -435,7 +456,11 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
             {/* Bandeau photo */}
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
               <h2 className="font-display text-xl font-bold text-slate-900">
-                Bandeau de la photo (10 × 15 cm)
+                Bandeau de la photo (
+                {draft.photoOrientation === 'portrait'
+                  ? '10 × 15 cm'
+                  : '15 × 10 cm'}
+                )
               </h2>
 
               <div>
@@ -492,6 +517,47 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
               <h2 className="font-display text-xl font-bold text-slate-900">
                 Caméra et compte à rebours
               </h2>
+
+              {/* Orientation de la photo */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                <div>
+                  <div className="text-base font-semibold text-slate-900">
+                    Orientation de la photo
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    S’applique à la photo finale, au cadre de visée et à
+                    l’impression
+                  </div>
+                </div>
+                <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({...draft, photoOrientation: 'landscape'})
+                    }
+                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                      draft.photoOrientation !== 'portrait'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600'
+                    }`}>
+                    <span className="inline-block h-3.5 w-5 rounded-[3px] border-2 border-current" />
+                    <span>Paysage</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({...draft, photoOrientation: 'portrait'})
+                    }
+                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                      draft.photoOrientation === 'portrait'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600'
+                    }`}>
+                    <span className="inline-block h-5 w-3.5 rounded-[3px] border-2 border-current" />
+                    <span>Portrait</span>
+                  </button>
+                </div>
+              </div>
 
               {/* Camera facing */}
               <div className="flex flex-wrap items-center justify-between gap-4">
@@ -926,7 +992,11 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
             type="button"
             onClick={() => setLightboxPhoto(null)}
             aria-label="Fermer"
-            className="fixed top-5 right-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-900 shadow-lg">
+            style={{
+              top: 'max(1rem, env(safe-area-inset-top))',
+              right: 'max(1rem, env(safe-area-inset-right))',
+            }}
+            className="fixed flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-900 shadow-lg">
             <X className="h-6 w-6" />
           </button>
           <img

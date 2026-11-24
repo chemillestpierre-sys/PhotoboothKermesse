@@ -1,21 +1,28 @@
 import {PhotoboothSettings} from '../types';
 
-export const PHOTO_WIDTH = 1200;
-export const PHOTO_HEIGHT = 1800;
-const BANNER_HEIGHT = 196;
-const IMAGE_AREA_HEIGHT = PHOTO_HEIGHT - BANNER_HEIGHT; // 1604
+export interface ViewfinderCropRects {
+  videoRect: DOMRect;
+  viewfinderRect: DOMRect;
+}
 
 export async function composePhotoBlob(
   video: HTMLVideoElement,
   settings: PhotoboothSettings,
+  cropRects?: ViewfinderCropRects | null,
 ): Promise<Blob> {
   if (document.fonts?.ready) {
     await document.fonts.ready;
   }
 
+  const isLandscape = settings.photoOrientation !== 'portrait';
+  const photoWidth = isLandscape ? 1800 : 1200;
+  const photoHeight = isLandscape ? 1200 : 1800;
+  const bannerHeight = isLandscape ? 116 : 196;
+  const imageAreaHeight = photoHeight - bannerHeight;
+
   const canvas = document.createElement('canvas');
-  canvas.width = PHOTO_WIDTH;
-  canvas.height = PHOTO_HEIGHT;
+  canvas.width = photoWidth;
+  canvas.height = photoHeight;
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     throw new Error('Contexte canvas indisponible');
@@ -23,7 +30,7 @@ export async function composePhotoBlob(
 
   // White base
   ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, PHOTO_WIDTH, PHOTO_HEIGHT);
+  ctx.fillRect(0, 0, photoWidth, photoHeight);
 
   const vw = video.videoWidth;
   const vh = video.videoHeight;
@@ -31,26 +38,57 @@ export async function composePhotoBlob(
     throw new Error('Flux vidéo non prêt');
   }
 
-  // Center-crop without distortion (object-fit: cover)
-  const targetRatio = PHOTO_WIDTH / IMAGE_AREA_HEIGHT;
-  const videoRatio = vw / vh;
+  // Compute source region from the exact viewfinder frame if available
+  let baseSx = 0;
+  let baseSy = 0;
+  let baseSw = vw;
+  let baseSh = vh;
 
-  let sx = 0;
-  let sy = 0;
-  let sw = vw;
-  let sh = vh;
+  if (
+    cropRects &&
+    cropRects.videoRect.width > 0 &&
+    cropRects.videoRect.height > 0 &&
+    cropRects.viewfinderRect.width > 0 &&
+    cropRects.viewfinderRect.height > 0
+  ) {
+    const {videoRect, viewfinderRect} = cropRects;
+    const scale = Math.max(videoRect.width / vw, videoRect.height / vh);
+    const renderedW = vw * scale;
+    const renderedH = vh * scale;
+    const renderedLeft = videoRect.left + (videoRect.width - renderedW) / 2;
+    const renderedTop = videoRect.top + (videoRect.height - renderedH) / 2;
 
-  if (videoRatio > targetRatio) {
-    sw = vh * targetRatio;
-    sx = (vw - sw) / 2;
+    const rawSx = (viewfinderRect.left - renderedLeft) / scale;
+    const rawSy = (viewfinderRect.top - renderedTop) / scale;
+    const rawSw = viewfinderRect.width / scale;
+    const rawSh = viewfinderRect.height / scale;
+
+    baseSx = Math.max(0, Math.min(vw - 1, rawSx));
+    baseSy = Math.max(0, Math.min(vh - 1, rawSy));
+    baseSw = Math.max(1, Math.min(vw - baseSx, rawSw));
+    baseSh = Math.max(1, Math.min(vh - baseSy, rawSh));
+  }
+
+  // Center-crop without distortion (object-fit: cover) into the photo area
+  const targetRatio = photoWidth / imageAreaHeight;
+  const sourceRatio = baseSw / baseSh;
+
+  let sx = baseSx;
+  let sy = baseSy;
+  let sw = baseSw;
+  let sh = baseSh;
+
+  if (sourceRatio > targetRatio) {
+    sw = baseSh * targetRatio;
+    sx = baseSx + (baseSw - sw) / 2;
   } else {
-    sh = vw / targetRatio;
-    sy = (vh - sh) / 2;
+    sh = baseSw / targetRatio;
+    sy = baseSy + (baseSh - sh) / 2;
   }
 
   ctx.save();
   ctx.beginPath();
-  ctx.rect(0, 0, PHOTO_WIDTH, IMAGE_AREA_HEIGHT);
+  ctx.rect(0, 0, photoWidth, imageAreaHeight);
   ctx.clip();
 
   ctx.drawImage(
@@ -61,20 +99,20 @@ export async function composePhotoBlob(
     sh,
     0,
     0,
-    PHOTO_WIDTH,
-    IMAGE_AREA_HEIGHT,
+    photoWidth,
+    imageAreaHeight,
   );
   ctx.restore();
 
   // Sober white bottom banner
   ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, IMAGE_AREA_HEIGHT, PHOTO_WIDTH, BANNER_HEIGHT);
+  ctx.fillRect(0, imageAreaHeight, photoWidth, bannerHeight);
 
   // Subtle top hairline divider
   ctx.fillStyle = 'rgba(15, 23, 42, 0.09)';
-  ctx.fillRect(0, IMAGE_AREA_HEIGHT, PHOTO_WIDTH, 2);
+  ctx.fillRect(0, imageAreaHeight, photoWidth, 2);
 
-  // Banner title
+  // Banner title & date
   const bannerTitle =
     settings.bannerText.trim() ||
     'Kermesse – École Saint-Pierre – Chemillé-en-Anjou';
@@ -83,31 +121,50 @@ export async function composePhotoBlob(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  let fontSize = 38;
+  let fontSize = isLandscape ? 32 : 38;
   ctx.fillStyle = '#0F172A';
-  while (fontSize > 22) {
+  while (fontSize > 20) {
     ctx.font = `700 ${fontSize}px "Bricolage Grotesque", "Plus Jakarta Sans", sans-serif`;
-    if (ctx.measureText(bannerTitle).width <= PHOTO_WIDTH - 96) {
+    if (ctx.measureText(bannerTitle).width <= photoWidth - 96) {
       break;
     }
     fontSize -= 2;
   }
 
-  const titleY = bannerDate
-    ? IMAGE_AREA_HEIGHT + 78
-    : IMAGE_AREA_HEIGHT + BANNER_HEIGHT / 2;
-  ctx.fillText(bannerTitle, PHOTO_WIDTH / 2, titleY, PHOTO_WIDTH - 80);
+  if (isLandscape) {
+    const titleY = bannerDate
+      ? imageAreaHeight + 42
+      : imageAreaHeight + bannerHeight / 2;
+    ctx.fillText(bannerTitle, photoWidth / 2, titleY, photoWidth - 80);
 
-  if (bannerDate) {
-    ctx.fillStyle = '#475569';
-    ctx.font =
-      '600 26px "Plus Jakarta Sans", system-ui, -apple-system, sans-serif';
-    ctx.fillText(
-      bannerDate,
-      PHOTO_WIDTH / 2,
-      IMAGE_AREA_HEIGHT + 136,
-      PHOTO_WIDTH - 80,
-    );
+    if (bannerDate) {
+      ctx.fillStyle = '#475569';
+      ctx.font =
+        '600 22px "Plus Jakarta Sans", system-ui, -apple-system, sans-serif';
+      ctx.fillText(
+        bannerDate,
+        photoWidth / 2,
+        imageAreaHeight + 84,
+        photoWidth - 80,
+      );
+    }
+  } else {
+    const titleY = bannerDate
+      ? imageAreaHeight + 78
+      : imageAreaHeight + bannerHeight / 2;
+    ctx.fillText(bannerTitle, photoWidth / 2, titleY, photoWidth - 80);
+
+    if (bannerDate) {
+      ctx.fillStyle = '#475569';
+      ctx.font =
+        '600 26px "Plus Jakarta Sans", system-ui, -apple-system, sans-serif';
+      ctx.fillText(
+        bannerDate,
+        photoWidth / 2,
+        imageAreaHeight + 136,
+        photoWidth - 80,
+      );
+    }
   }
 
   return new Promise<Blob>((resolve, reject) => {

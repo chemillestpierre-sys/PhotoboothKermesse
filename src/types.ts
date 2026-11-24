@@ -2,6 +2,8 @@ export type AppScreen = 'home' | 'camera' | 'preview' | 'admin';
 
 export type CameraFacing = 'user' | 'environment';
 
+export type PhotoOrientation = 'landscape' | 'portrait';
+
 export interface PhotoboothSettings {
   bannerText: string;
   bannerDate: string;
@@ -10,6 +12,7 @@ export interface PhotoboothSettings {
   otherTimeoutSeconds: number;
   cameraFacing: CameraFacing;
   cameraDeviceId: string;
+  photoOrientation: PhotoOrientation;
   adminPin: string;
 }
 

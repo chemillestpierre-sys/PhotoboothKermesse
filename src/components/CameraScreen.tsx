@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Camera,
   RefreshCw,
+  RotateCw,
 } from 'lucide-react';
 import {AnimatePresence, motion} from 'motion/react';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
@@ -30,6 +31,8 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   onBusyChange,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const viewfinderSlotRef = useRef<HTMLDivElement | null>(null);
+  const viewfinderRef = useRef<HTMLDivElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -39,6 +42,64 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isFlashing, setIsFlashing] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [frameSize, setFrameSize] = useState<{width: number; height: number}>({
+    width: 300,
+    height: 200,
+  });
+  const [isDevicePortrait, setIsDevicePortrait] = useState(() =>
+    typeof window !== 'undefined'
+      ? window.innerHeight > window.innerWidth
+      : false,
+  );
+
+  const updateViewfinderLayout = useCallback(() => {
+    setIsDevicePortrait(window.innerHeight > window.innerWidth);
+    const slot = viewfinderSlotRef.current;
+    if (!slot) return;
+    const rect = slot.getBoundingClientRect();
+    const availW = Math.max(80, rect.width - 16);
+    const availH = Math.max(80, rect.height - 12);
+    const targetRatio =
+      settings.photoOrientation === 'portrait' ? 2 / 3 : 3 / 2;
+
+    if (availW / availH > targetRatio) {
+      const h = Math.floor(availH);
+      const w = Math.floor(h * targetRatio);
+      setFrameSize({width: w, height: h});
+    } else {
+      const w = Math.floor(availW);
+      const h = Math.floor(w / targetRatio);
+      setFrameSize({width: w, height: h});
+    }
+  }, [settings.photoOrientation]);
+
+  useEffect(() => {
+    updateViewfinderLayout();
+    const slot = viewfinderSlotRef.current;
+    let observer: ResizeObserver | null = null;
+    if (slot && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => updateViewfinderLayout());
+      observer.observe(slot);
+    }
+
+    let settleTimer: number | null = null;
+    const handleOrientation = () => {
+      updateViewfinderLayout();
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => {
+        updateViewfinderLayout();
+      }, 140);
+    };
+
+    window.addEventListener('resize', handleOrientation);
+    window.addEventListener('orientationchange', handleOrientation);
+    return () => {
+      observer?.disconnect();
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      window.removeEventListener('resize', handleOrientation);
+      window.removeEventListener('orientationchange', handleOrientation);
+    };
+  }, [updateViewfinderLayout]);
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -205,7 +266,13 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     }, 420);
 
     if (video) {
-      composePhotoBlob(video, settings)
+      const cropRects = viewfinderRef.current
+        ? {
+            videoRect: video.getBoundingClientRect(),
+            viewfinderRect: viewfinderRef.current.getBoundingClientRect(),
+          }
+        : null;
+      composePhotoBlob(video, settings, cropRects)
         .then((blob) => {
           window.setTimeout(() => {
             stopStream();
@@ -294,35 +361,30 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   };
 
   return (
-    <main className="relative flex h-dvh w-screen flex-col justify-between overflow-hidden bg-slate-950 select-none">
+    <main className="app-viewport relative flex flex-col justify-between bg-slate-950 select-none">
       {/* Fullscreen live video feed (never mirrored) */}
       <video
         ref={videoRef}
         playsInline
         muted
         autoPlay
-        onLoadedMetadata={() => setIsReady(true)}
+        onLoadedMetadata={() => {
+          setIsReady(true);
+          updateViewfinderLayout();
+        }}
         className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
           isReady && !errorKind ? 'opacity-100' : 'opacity-0'
         }`}
       />
 
-      {/* Subtle framing corner guides */}
-      {isReady && !errorKind && countdown === null && !isCapturing && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 sm:p-10">
-          <div className="relative h-full max-h-[82dvh] aspect-[3/4] max-w-[88vw]">
-            <div className="absolute top-0 left-0 h-10 w-10 rounded-tl-2xl border-t-4 border-l-4 border-white/55" />
-            <div className="absolute top-0 right-0 h-10 w-10 rounded-tr-2xl border-t-4 border-r-4 border-white/55" />
-            <div className="absolute bottom-0 left-0 h-10 w-10 rounded-bl-2xl border-b-4 border-l-4 border-white/55" />
-            <div className="absolute bottom-0 right-0 h-10 w-10 rounded-br-2xl border-b-4 border-r-4 border-white/55" />
-          </div>
-        </div>
-      )}
-
-      {/* Top bar: Back button + discreet fallback notice if rear camera unavailable */}
-      <div className="relative z-20 flex items-start justify-between gap-3 p-4 sm:p-6">
+      {/* Top bar: Back button + discreet rotation / fallback notices */}
+      <div
+        style={{
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+          paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+          paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
+        }}
+        className="relative z-20 flex shrink-0 items-start justify-between gap-2 pb-1">
         {countdown === null && !isCapturing ? (
           <button
             type="button"
@@ -330,50 +392,98 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
               stopStream();
               onBack();
             }}
-            className="inline-flex min-h-[52px] items-center gap-2.5 rounded-2xl bg-slate-900/65 px-5 py-3 text-base font-bold text-white backdrop-blur-md transition hover:bg-slate-900/80 active:scale-95">
-            <ArrowLeft className="h-6 w-6 shrink-0" />
+            style={{
+              fontSize: 'clamp(0.875rem, 2.3vmin, 1.05rem)',
+              padding:
+                'clamp(0.5rem, 1.2dvh, 0.75rem) clamp(0.9rem, 2.5vw, 1.25rem)',
+            }}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-slate-900/65 font-bold text-white backdrop-blur-md transition hover:bg-slate-900/80 active:scale-95">
+            <ArrowLeft className="h-5 w-5 shrink-0" />
             <span>Retour</span>
           </button>
         ) : (
           <div />
         )}
 
-        {fallbackNotice && isReady && !errorKind && (
-          <div className="rounded-2xl bg-slate-900/65 px-3.5 py-2 text-xs font-medium text-white/90 backdrop-blur-md sm:text-sm">
-            {fallbackNotice}
-          </div>
-        )}
+        <div className="flex flex-col items-end gap-1.5">
+          {settings.photoOrientation !== 'portrait' &&
+            isDevicePortrait &&
+            isReady &&
+            !errorKind &&
+            countdown === null &&
+            !isCapturing && (
+              <div className="inline-flex items-center gap-1.5 rounded-2xl bg-slate-900/75 px-3 py-1.5 text-xs font-medium text-white/95 backdrop-blur-md sm:text-sm">
+                <RotateCw className="h-4 w-4 shrink-0" />
+                <span>Tournez l’appareil en paysage</span>
+              </div>
+            )}
+
+          {fallbackNotice && isReady && !errorKind && (
+            <div className="rounded-2xl bg-slate-900/65 px-3 py-1.5 text-xs font-medium text-white/90 backdrop-blur-md sm:text-sm">
+              {fallbackNotice}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Loading state */}
-      {isLoading && !errorKind && (
-        <div className="relative z-20 flex flex-1 items-center justify-center">
-          <div className="rounded-3xl bg-slate-900/80 px-8 py-6 text-center text-white backdrop-blur-md">
-            <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-4 border-white/30 border-t-white" />
-            <p className="font-display text-xl font-bold">
+      {/* Middle flexible slot: holds viewfinder frame OR loading/error state */}
+      <div
+        ref={viewfinderSlotRef}
+        style={{
+          paddingLeft: 'max(0.5rem, env(safe-area-inset-left))',
+          paddingRight: 'max(0.5rem, env(safe-area-inset-right))',
+        }}
+        className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+        {isReady && !errorKind && (
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none flex items-center justify-center transition-opacity ${
+              countdown === null && !isCapturing ? 'opacity-100' : 'opacity-0'
+            }`}>
+            <div
+              ref={viewfinderRef}
+              style={{
+                width: `${frameSize.width}px`,
+                height: `${frameSize.height}px`,
+                boxShadow: '0 0 0 9999px rgba(2, 6, 23, 0.56)',
+              }}
+              className="relative rounded-xl ring-1 ring-white/45">
+              <div className="absolute -top-0.5 -left-0.5 h-7 w-7 rounded-tl-xl border-t-4 border-l-4 border-white sm:h-8 sm:w-8" />
+              <div className="absolute -top-0.5 -right-0.5 h-7 w-7 rounded-tr-xl border-t-4 border-r-4 border-white sm:h-8 sm:w-8" />
+              <div className="absolute -bottom-0.5 -left-0.5 h-7 w-7 rounded-bl-xl border-b-4 border-l-4 border-white sm:h-8 sm:w-8" />
+              <div className="absolute -bottom-0.5 -right-0.5 h-7 w-7 rounded-br-xl border-b-4 border-r-4 border-white sm:h-8 sm:w-8" />
+            </div>
+          </div>
+        )}
+
+        {isLoading && !errorKind && (
+          <div className="relative z-20 rounded-3xl bg-slate-900/80 px-6 py-5 text-center text-white backdrop-blur-md sm:px-8 sm:py-6">
+            <div className="mx-auto mb-3 h-9 w-9 animate-spin rounded-full border-4 border-white/30 border-t-white" />
+            <p
+              style={{fontSize: 'clamp(1rem, 2.8vmin, 1.25rem)'}}
+              className="font-display font-bold">
               Ouverture de l’appareil photo…
             </p>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Camera error state */}
-      {errorKind && (
-        <div className="relative z-20 flex flex-1 items-center justify-center p-6">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-7 text-slate-900 shadow-2xl sm:p-9">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
-                <AlertTriangle className="h-8 w-8" />
+        {errorKind && (
+          <div className="relative z-20 max-h-full w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 text-slate-900 shadow-2xl sm:p-8">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 sm:h-14 sm:w-14">
+                <AlertTriangle className="h-7 w-7 sm:h-8 sm:w-8" />
               </div>
-              <h2 className="font-display text-2xl font-extrabold text-slate-900 sm:text-3xl">
+              <h2
+                style={{fontSize: 'clamp(1.15rem, 3.4vmin, 1.75rem)'}}
+                className="font-display font-extrabold text-slate-900">
                 {renderErrorContent().title}
               </h2>
             </div>
 
-            <ol className="mt-6 space-y-3 text-base leading-relaxed text-slate-700 sm:text-lg">
+            <ol className="mt-4 space-y-2.5 text-sm leading-relaxed text-slate-700 sm:mt-6 sm:space-y-3 sm:text-base">
               {renderErrorContent().steps.map((step, idx) => (
                 <li key={idx} className="flex items-start gap-3">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-800">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-800 sm:h-7 sm:w-7 sm:text-sm">
                     {idx + 1}
                   </span>
                   <span>{step}</span>
@@ -381,24 +491,24 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
               ))}
             </ol>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-6 flex flex-col gap-2.5 sm:mt-8 sm:flex-row sm:gap-3">
               <button
                 type="button"
                 onClick={() => void startCamera()}
-                className="flex flex-1 min-h-[56px] items-center justify-center gap-2.5 rounded-2xl bg-[#FF5A36] px-6 py-3.5 text-lg font-bold text-white transition hover:bg-[#F34F2B] active:scale-[0.98]">
+                className="flex flex-1 min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#FF5A36] px-5 py-3 text-base font-bold text-white transition hover:bg-[#F34F2B] active:scale-[0.98]">
                 <RefreshCw className="h-5 w-5" />
                 <span>Réessayer</span>
               </button>
               <button
                 type="button"
                 onClick={onBack}
-                className="flex flex-1 min-h-[56px] items-center justify-center gap-2 rounded-2xl bg-slate-100 px-6 py-3.5 text-lg font-bold text-slate-700 transition hover:bg-slate-200 active:scale-[0.98]">
+                className="flex flex-1 min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-slate-100 px-5 py-3 text-base font-bold text-slate-700 transition hover:bg-slate-200 active:scale-[0.98]">
                 <span>Accueil</span>
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Animated big countdown overlay */}
       <AnimatePresence mode="wait">
@@ -410,21 +520,41 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
             exit={{scale: 1.35, opacity: 0}}
             transition={{duration: 0.32, ease: [0.16, 1, 0.3, 1]}}
             className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-slate-950/20">
-            <span className="font-display text-[11rem] leading-none font-extrabold text-white drop-shadow-[0_12px_32px_rgba(0,0,0,0.6)] sm:text-[15rem] tabular-nums">
+            <span
+              style={{fontSize: 'clamp(5rem, 28vmin, 14rem)'}}
+              className="font-display leading-none font-extrabold text-white drop-shadow-[0_12px_32px_rgba(0,0,0,0.6)] tabular-nums">
               {countdown}
             </span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Bottom primary CTA */}
-      <div className="relative z-20 flex justify-center px-6 pb-8 pt-4 sm:pb-10">
+      {/* Bottom primary CTA anchored in thumb zone */}
+      <div
+        style={{
+          paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+          paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+          paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
+        }}
+        className="relative z-20 flex shrink-0 justify-center pt-1.5">
         {isReady && !errorKind && countdown === null && !isCapturing && (
           <button
             type="button"
             onClick={handleStartCountdown}
-            className="flex min-h-[84px] items-center justify-center gap-4 rounded-[2rem] bg-[#FF5A36] px-12 py-5 text-3xl font-extrabold text-white shadow-[0_10px_0_0_#C93B1D] transition-all hover:bg-[#F34F2B] active:translate-y-2 active:shadow-[0_2px_0_0_#C93B1D] sm:min-h-[96px] sm:px-16 sm:text-4xl whitespace-nowrap">
-            <Camera className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" strokeWidth={2.5} />
+            style={{
+              fontSize: 'clamp(1.15rem, 3.6vmin, 2.2rem)',
+              padding:
+                'clamp(0.65rem, 2dvh, 1.25rem) clamp(1.6rem, 6vw, 3.5rem)',
+            }}
+            className="flex items-center justify-center gap-[clamp(0.6rem,2vw,1rem)] rounded-[1.75rem] bg-[#FF5A36] font-extrabold text-white shadow-[0_8px_0_0_#C93B1D] transition-all hover:bg-[#F34F2B] active:translate-y-1.5 active:shadow-[0_2px_0_0_#C93B1D] sm:rounded-[2rem] whitespace-nowrap">
+            <Camera
+              style={{
+                width: 'clamp(1.4rem, 3.8vmin, 2.4rem)',
+                height: 'clamp(1.4rem, 3.8vmin, 2.4rem)',
+              }}
+              className="shrink-0"
+              strokeWidth={2.5}
+            />
             <span>C’est parti !</span>
           </button>
         )}
