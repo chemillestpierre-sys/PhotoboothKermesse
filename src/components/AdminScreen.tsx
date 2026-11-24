@@ -1,0 +1,832 @@
+import {
+  Archive,
+  ArrowLeft,
+  Camera,
+  Check,
+  CheckCircle2,
+  FlipHorizontal2,
+  Images,
+  Minus,
+  Plus,
+  Printer,
+  RefreshCw,
+  RotateCcw,
+  Settings,
+  Trash2,
+  WifiOff,
+  X,
+} from 'lucide-react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {useOfflineReady} from '../hooks/usePWAInstall';
+import {
+  clearAllPhotos,
+  deletePhoto,
+  getAllPhotos,
+} from '../lib/db';
+import {formatFrenchDate, getDefaultSettings} from '../lib/settings';
+import {exportPhotosAsZip} from '../lib/zipExport';
+import {PhotoRecord, PhotoboothSettings} from '../types';
+import {PWAInstallButton} from './PWAInstallButton';
+
+interface AdminScreenProps {
+  settings: PhotoboothSettings;
+  onUpdateSettings: (next: PhotoboothSettings) => void;
+  onPrintPhoto: (photo: PhotoRecord) => Promise<void>;
+  onClose: () => void;
+  onBusyChange?: (busy: boolean) => void;
+}
+
+interface PhotoWithUrl extends PhotoRecord {
+  url: string;
+}
+
+export const AdminScreen: React.FC<AdminScreenProps> = ({
+  settings,
+  onUpdateSettings,
+  onPrintPhoto,
+  onClose,
+  onBusyChange,
+}) => {
+  const [activeTab, setActiveTab] = useState<'gallery' | 'settings'>('gallery');
+  const [photos, setPhotos] = useState<PhotoWithUrl[]>([]);
+  const [loadingPhotos, setLoadingPhotos] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Confirmations
+  const [deleteTarget, setDeleteTarget] = useState<PhotoWithUrl | null>(null);
+  const [clearStep, setClearStep] = useState<0 | 1 | 2>(0);
+  const [lightboxPhoto, setLightboxPhoto] = useState<PhotoWithUrl | null>(null);
+
+  // Settings draft
+  const [draft, setDraft] = useState<PhotoboothSettings>(settings);
+  const [pinError, setPinError] = useState('');
+  const [savedNotice, setSavedNotice] = useState(false);
+
+  const {isOfflineReady, checking: checkingOffline, refresh: refreshOffline} =
+    useOfflineReady();
+
+  const activeUrlsRef = useRef<string[]>([]);
+
+  const loadGallery = async () => {
+    setLoadingPhotos(true);
+    try {
+      const records = await getAllPhotos();
+      activeUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+      const withUrls = records.map((r) => ({
+        ...r,
+        url: URL.createObjectURL(r.blob),
+      }));
+      activeUrlsRef.current = withUrls.map((p) => p.url);
+      setPhotos(withUrls);
+    } finally {
+      setLoadingPhotos(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadGallery();
+    return () => {
+      activeUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+      activeUrlsRef.current = [];
+    };
+  }, []);
+
+  useEffect(() => {
+    setDraft(settings);
+  }, [settings]);
+
+  useEffect(() => {
+    onBusyChange?.(isExporting);
+  }, [isExporting, onBusyChange]);
+
+  const totalPrints = useMemo(
+    () => photos.reduce((acc, p) => acc + (p.printCount || 0), 0),
+    [photos],
+  );
+
+  const formatTime = (ts: number) =>
+    new Intl.DateTimeFormat('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(new Date(ts));
+
+  const formatDay = (ts: number) =>
+    new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(new Date(ts));
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    await deletePhoto(deleteTarget.id);
+    URL.revokeObjectURL(deleteTarget.url);
+    setPhotos((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+    setDeleteTarget(null);
+  };
+
+  const handleConfirmClearAll = async () => {
+    await clearAllPhotos();
+    photos.forEach((p) => URL.revokeObjectURL(p.url));
+    setPhotos([]);
+    setClearStep(0);
+  };
+
+  const handleExportZip = async () => {
+    if (photos.length === 0 || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportPhotosAsZip(photos);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleReprint = async (photo: PhotoWithUrl) => {
+    await onPrintPhoto(photo);
+    setPhotos((prev) =>
+      prev.map((p) =>
+        p.id === photo.id ? {...p, printCount: (p.printCount || 0) + 1} : p,
+      ),
+    );
+  };
+
+  const handleSaveSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!/^\d{4,8}$/.test(draft.adminPin)) {
+      setPinError('Le code PIN doit contenir entre 4 et 8 chiffres.');
+      return;
+    }
+    setPinError('');
+    onUpdateSettings(draft);
+    setSavedNotice(true);
+    window.setTimeout(() => setSavedNotice(false), 2500);
+  };
+
+  const handleResetDefaults = () => {
+    const def = getDefaultSettings();
+    setDraft(def);
+    onUpdateSettings(def);
+    setPinError('');
+    setSavedNotice(true);
+    window.setTimeout(() => setSavedNotice(false), 2500);
+  };
+
+  return (
+    <div className="flex h-dvh w-screen flex-col overflow-hidden bg-[#FAF8F4] text-slate-900">
+      {/* Top Bar */}
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex min-h-[48px] items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-base font-bold text-white transition hover:bg-slate-800 active:scale-95 whitespace-nowrap">
+            <ArrowLeft className="h-5 w-5" />
+            <span>Retour au photobooth</span>
+          </button>
+          <h1 className="font-display text-2xl font-extrabold text-slate-900 sm:text-3xl">
+            Espace bénévole
+          </h1>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Offline readiness indicator */}
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-semibold">
+            {isOfflineReady ? (
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+            ) : (
+              <WifiOff className="h-5 w-5 shrink-0 text-amber-600" />
+            )}
+            <span className="text-slate-700">
+              Prête pour le hors ligne :{' '}
+              <strong
+                className={
+                  isOfflineReady ? 'text-emerald-700' : 'text-amber-700'
+                }>
+                {checkingOffline ? 'Vérification…' : isOfflineReady ? 'Oui' : 'Non'}
+              </strong>
+            </span>
+            <button
+              type="button"
+              onClick={() => void refreshOffline()}
+              title="Vérifier à nouveau"
+              aria-label="Vérifier la disponibilité hors ligne"
+              className="ml-1 flex h-8 w-8 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-200 hover:text-slate-800">
+              <RefreshCw
+                className={`h-4 w-4 ${checkingOffline ? 'animate-spin' : ''}`}
+              />
+            </button>
+          </div>
+
+          <PWAInstallButton variant="admin" />
+        </div>
+      </header>
+
+      {/* Navigation tabs */}
+      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-3 sm:px-8">
+        <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('gallery')}
+            className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-5 py-2 text-base font-bold transition ${
+              activeTab === 'gallery'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}>
+            <Images className="h-5 w-5" />
+            <span>Galerie ({photos.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('settings')}
+            className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-5 py-2 text-base font-bold transition ${
+              activeTab === 'settings'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}>
+            <Settings className="h-5 w-5" />
+            <span>Réglages</span>
+          </button>
+        </div>
+
+        <div className="hidden text-sm font-medium text-slate-600 sm:flex sm:items-center sm:gap-2 tabular-nums">
+          <span>
+            <strong className="text-slate-900">{photos.length}</strong>{' '}
+            {photos.length > 1 ? 'photos' : 'photo'}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            <strong className="text-slate-900">{totalPrints}</strong>{' '}
+            {totalPrints > 1 ? 'impressions' : 'impression'}
+          </span>
+        </div>
+      </div>
+
+      {/* Main scrollable content */}
+      <div className="flex-1 overflow-y-auto p-5 sm:p-8">
+        {activeTab === 'gallery' ? (
+          <div className="mx-auto max-w-6xl space-y-6">
+            {/* Gallery summary + bulk actions */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="text-base font-medium text-slate-600 tabular-nums">
+                <strong className="text-slate-900">{photos.length}</strong>{' '}
+                {photos.length > 1 ? 'photos enregistrées' : 'photo enregistrée'}
+                {' · '}
+                <strong className="text-slate-900">{totalPrints}</strong>{' '}
+                {totalPrints > 1 ? 'impressions au total' : 'impression au total'}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => void handleExportZip()}
+                  disabled={photos.length === 0 || isExporting}
+                  className="inline-flex min-h-[48px] items-center gap-2.5 rounded-2xl bg-sky-600 px-5 py-2.5 text-base font-bold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-45 active:scale-95 whitespace-nowrap">
+                  <Archive className="h-5 w-5 shrink-0" />
+                  <span>
+                    {isExporting
+                      ? 'Préparation du ZIP…'
+                      : 'Exporter tout en ZIP'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setClearStep(1)}
+                  disabled={photos.length === 0}
+                  className="inline-flex min-h-[48px] items-center gap-2 rounded-2xl border border-red-200 bg-white px-5 py-2.5 text-base font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-45 active:scale-95 whitespace-nowrap">
+                  <Trash2 className="h-5 w-5 shrink-0" />
+                  <span>Tout effacer</span>
+                </button>
+              </div>
+            </div>
+
+            {loadingPhotos ? (
+              <div className="py-20 text-center text-lg font-medium text-slate-500">
+                Chargement des photos…
+              </div>
+            ) : photos.length === 0 ? (
+              <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center">
+                <Images className="mx-auto h-12 w-12 text-slate-300" />
+                <p className="mt-4 font-display text-xl font-bold text-slate-800">
+                  Aucune photo enregistrée pour le moment
+                </p>
+                <p className="mt-1 text-base text-slate-500">
+                  Les photos validées par les familles apparaîtront ici.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {photos.map((photo) => (
+                  <article
+                    key={photo.id}
+                    className="flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => setLightboxPhoto(photo)}
+                      className="aspect-[2/3] w-full overflow-hidden bg-slate-100 focus:outline-none">
+                      <img
+                        src={photo.url}
+                        alt={`Photo prise à ${formatTime(photo.createdAt)}`}
+                        className="h-full w-full object-cover transition hover:scale-[1.02]"
+                      />
+                    </button>
+
+                    <div className="flex flex-col gap-3 p-4">
+                      <div className="flex items-baseline justify-between gap-2 text-sm tabular-nums">
+                        <span className="font-bold text-slate-900">
+                          {formatTime(photo.createdAt)}
+                        </span>
+                        <span className="text-slate-500">
+                          {formatDay(photo.createdAt)}
+                        </span>
+                      </div>
+
+                      <div className="text-sm font-medium text-slate-600 tabular-nums">
+                        {photo.printCount === 0
+                          ? 'Non imprimée'
+                          : photo.printCount === 1
+                            ? 'Imprimée 1 fois'
+                            : `Imprimée ${photo.printCount} fois`}
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => void handleReprint(photo)}
+                          className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-sky-50 px-3 py-2 text-sm font-bold text-sky-700 transition hover:bg-sky-100 active:scale-95">
+                          <Printer className="h-4 w-4 shrink-0" />
+                          <span>Réimprimer</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(photo)}
+                          aria-label="Supprimer cette photo"
+                          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-red-50 text-red-600 transition hover:bg-red-100 active:scale-95">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSaveSettings}
+            className="mx-auto max-w-3xl space-y-6 pb-12">
+            {/* Bandeau photo */}
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+              <h2 className="font-display text-xl font-bold text-slate-900">
+                Bandeau de la photo (10 × 15 cm)
+              </h2>
+
+              <div>
+                <label
+                  htmlFor="bannerText"
+                  className="block text-sm font-semibold text-slate-700">
+                  Texte du bandeau
+                </label>
+                <input
+                  id="bannerText"
+                  type="text"
+                  value={draft.bannerText}
+                  onChange={(e) =>
+                    setDraft({...draft, bannerText: e.target.value})
+                  }
+                  className="mt-2 w-full min-h-[48px] rounded-2xl border border-slate-300 px-4 py-2.5 text-base text-slate-900 focus:border-slate-900 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="bannerDate"
+                  className="block text-sm font-semibold text-slate-700">
+                  Date affichée sous le texte
+                </label>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    id="bannerDate"
+                    type="text"
+                    value={draft.bannerDate}
+                    onChange={(e) =>
+                      setDraft({...draft, bannerDate: e.target.value})
+                    }
+                    placeholder="Ex. 20 juin 2027"
+                    className="flex-1 min-h-[48px] rounded-2xl border border-slate-300 px-4 py-2.5 text-base text-slate-900 focus:border-slate-900 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        bannerDate: formatFrenchDate(new Date()),
+                      })
+                    }
+                    className="min-h-[48px] rounded-2xl bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-200 whitespace-nowrap">
+                    Date du jour
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            {/* Caméra & déclenchement */}
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+              <h2 className="font-display text-xl font-bold text-slate-900">
+                Caméra et compte à rebours
+              </h2>
+
+              {/* Camera facing */}
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <div className="text-base font-semibold text-slate-900">
+                    Caméra utilisée
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    Frontale recommandée quand la tablette fait face aux familles
+                  </div>
+                </div>
+                <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setDraft({...draft, cameraFacing: 'user'})}
+                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                      draft.cameraFacing === 'user'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600'
+                    }`}>
+                    <Camera className="h-4 w-4" />
+                    <span>Frontale</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({...draft, cameraFacing: 'environment'})
+                    }
+                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                      draft.cameraFacing === 'environment'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600'
+                    }`}>
+                    <Camera className="h-4 w-4" />
+                    <span>Arrière</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Mirror effect */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-5">
+                <div>
+                  <div className="text-base font-semibold text-slate-900">
+                    Effet miroir
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    Inverse l’image horizontalement (comme un miroir)
+                  </div>
+                </div>
+                <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setDraft({...draft, mirrorEffect: true})}
+                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                      draft.mirrorEffect
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600'
+                    }`}>
+                    <FlipHorizontal2 className="h-4 w-4" />
+                    <span>Oui</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraft({...draft, mirrorEffect: false})}
+                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                      !draft.mirrorEffect
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600'
+                    }`}>
+                    <span>Non</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Countdown duration */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-5">
+                <div>
+                  <div className="text-base font-semibold text-slate-900">
+                    Durée du compte à rebours
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    Secondes avant le déclenchement (par défaut : 3 s)
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        countdownSeconds: Math.max(1, draft.countdownSeconds - 1),
+                      })
+                    }
+                    aria-label="Diminuer"
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 hover:bg-slate-200 active:scale-95">
+                    <Minus className="h-5 w-5" />
+                  </button>
+                  <span className="w-16 text-center font-display text-xl font-bold tabular-nums">
+                    {draft.countdownSeconds} s
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        countdownSeconds: Math.min(
+                          10,
+                          draft.countdownSeconds + 1,
+                        ),
+                      })
+                    }
+                    aria-label="Augmenter"
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 hover:bg-slate-200 active:scale-95">
+                    <Plus className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            {/* Délais d'inactivité & sécurité */}
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+              <h2 className="font-display text-xl font-bold text-slate-900">
+                Délais d’inactivité et sécurité
+              </h2>
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <div className="text-base font-semibold text-slate-900">
+                    Retour automatique (Visualisation)
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    Enregistre la photo et revient à l’accueil (défaut : 120 s)
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        previewTimeoutSeconds: Math.max(
+                          15,
+                          draft.previewTimeoutSeconds - 15,
+                        ),
+                      })
+                    }
+                    aria-label="Diminuer"
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 hover:bg-slate-200 active:scale-95">
+                    <Minus className="h-5 w-5" />
+                  </button>
+                  <span className="w-20 text-center font-display text-xl font-bold tabular-nums">
+                    {draft.previewTimeoutSeconds} s
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        previewTimeoutSeconds: Math.min(
+                          600,
+                          draft.previewTimeoutSeconds + 15,
+                        ),
+                      })
+                    }
+                    aria-label="Augmenter"
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 hover:bg-slate-200 active:scale-95">
+                    <Plus className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-5">
+                <div>
+                  <div className="text-base font-semibold text-slate-900">
+                    Retour automatique (Autres écrans)
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    Caméra et code PIN sans action (défaut : 30 s)
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        otherTimeoutSeconds: Math.max(
+                          10,
+                          draft.otherTimeoutSeconds - 5,
+                        ),
+                      })
+                    }
+                    aria-label="Diminuer"
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 hover:bg-slate-200 active:scale-95">
+                    <Minus className="h-5 w-5" />
+                  </button>
+                  <span className="w-20 text-center font-display text-xl font-bold tabular-nums">
+                    {draft.otherTimeoutSeconds} s
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        otherTimeoutSeconds: Math.min(
+                          300,
+                          draft.otherTimeoutSeconds + 5,
+                        ),
+                      })
+                    }
+                    aria-label="Augmenter"
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 hover:bg-slate-200 active:scale-95">
+                    <Plus className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-5">
+                <label
+                  htmlFor="adminPin"
+                  className="block text-base font-semibold text-slate-900">
+                  Code PIN bénévole (4 à 8 chiffres)
+                </label>
+                <input
+                  id="adminPin"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{4,8}"
+                  maxLength={8}
+                  value={draft.adminPin}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      adminPin: e.target.value.replace(/\D/g, ''),
+                    })
+                  }
+                  className="mt-2 w-48 min-h-[48px] rounded-2xl border border-slate-300 px-4 py-2.5 font-display text-xl font-bold tracking-widest text-slate-900 tabular-nums focus:border-slate-900 focus:outline-none"
+                />
+                {pinError && (
+                  <p className="mt-2 text-sm font-semibold text-red-600">
+                    {pinError}
+                  </p>
+                )}
+              </div>
+            </section>
+
+            {/* Save actions */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={handleResetDefaults}
+                className="inline-flex min-h-[52px] items-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-base font-bold text-slate-700 hover:bg-slate-50 active:scale-95">
+                <RotateCcw className="h-4 w-4" />
+                <span>Valeurs par défaut</span>
+              </button>
+
+              <div className="flex items-center gap-4">
+                {savedNotice && (
+                  <span className="inline-flex items-center gap-1.5 text-base font-bold text-emerald-700">
+                    <Check className="h-5 w-5" />
+                    Réglages enregistrés
+                  </span>
+                )}
+                <button
+                  type="submit"
+                  className="inline-flex min-h-[52px] items-center gap-2 rounded-2xl bg-[#10B981] px-8 py-3 text-lg font-extrabold text-white shadow-sm transition hover:bg-[#059669] active:scale-95">
+                  <Check className="h-5 w-5" />
+                  <span>Enregistrer</span>
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* Single photo delete confirmation */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-6 backdrop-blur-sm"
+          onClick={() => setDeleteTarget(null)}>
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white p-7 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-2xl font-bold text-slate-900">
+              Supprimer cette photo ?
+            </h3>
+            <p className="mt-2 text-base text-slate-600">
+              La photo prise à {formatTime(deleteTarget.createdAt)} sera
+              définitivement effacée de la tablette.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 min-h-[48px] rounded-2xl bg-slate-100 font-bold text-slate-700 hover:bg-slate-200">
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmDelete()}
+                className="flex-1 min-h-[48px] rounded-2xl bg-red-600 font-bold text-white hover:bg-red-700">
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear all double confirmation */}
+      {clearStep > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-6 backdrop-blur-sm"
+          onClick={() => setClearStep(0)}>
+          <div
+            className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            {clearStep === 1 ? (
+              <>
+                <h3 className="font-display text-2xl font-bold text-slate-900">
+                  Tout effacer ?
+                </h3>
+                <p className="mt-2 text-base text-slate-600">
+                  Vous êtes sur le point de supprimer les{' '}
+                  <strong>{photos.length}</strong> photos stockées sur cette
+                  tablette. Pensez à exporter le fichier ZIP avant !
+                </p>
+                <div className="mt-6 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setClearStep(0)}
+                    className="flex-1 min-h-[48px] rounded-2xl bg-slate-100 font-bold text-slate-700 hover:bg-slate-200">
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClearStep(2)}
+                    className="flex-1 min-h-[48px] rounded-2xl bg-red-600 font-bold text-white hover:bg-red-700">
+                    Continuer
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="font-display text-2xl font-bold text-red-700">
+                  Confirmation définitive
+                </h3>
+                <p className="mt-2 text-base text-slate-700">
+                  Cette action est irréversible. Toutes les photos seront
+                  perdues définitivement.
+                </p>
+                <div className="mt-6 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setClearStep(0)}
+                    className="flex-1 min-h-[48px] rounded-2xl bg-slate-100 font-bold text-slate-700 hover:bg-slate-200">
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleConfirmClearAll()}
+                    className="flex-1 min-h-[48px] rounded-2xl bg-red-700 font-bold text-white hover:bg-red-800">
+                    Oui, tout supprimer
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox preview */}
+      {lightboxPhoto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-6"
+          onClick={() => setLightboxPhoto(null)}>
+          <button
+            type="button"
+            onClick={() => setLightboxPhoto(null)}
+            aria-label="Fermer"
+            className="fixed top-5 right-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-900 shadow-lg">
+            <X className="h-6 w-6" />
+          </button>
+          <img
+            src={lightboxPhoto.url}
+            alt="Aperçu"
+            className="max-h-[90dvh] max-w-[90vw] rounded-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+    </div>
+  );
+};

@@ -1,0 +1,6 @@
+{
+  "name": "Photobooth Kermesse",
+  "description": "Photobooth hors ligne pour la kermesse de l'École Saint-Pierre à Chemillé-en-Anjou.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

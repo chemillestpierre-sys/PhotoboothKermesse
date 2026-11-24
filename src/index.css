@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-display: "Bricolage Grotesque", system-ui, -apple-system, sans-serif;
+    --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-sans);
+    background-color: #faf8f4;
+    color: #1e293b;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+/* Print stylesheet: 10 x 15 cm borderless photo only */
+@page {
+  size: 10cm 15cm portrait;
+  margin: 0;
+}
+
+#print-photo-root {
+  display: none;
+}
+
+@media print {
+  html,
+  body {
+    width: 10cm !important;
+    height: 15cm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    overflow: hidden !important;
+  }
+
+  body > #root > *:not(#print-photo-root) {
+    display: none !important;
+  }
+
+  #print-photo-root {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 10cm !important;
+    height: 15cm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  #print-photo-root img {
+    display: block !important;
+    width: 10cm !important;
+    height: 15cm !important;
+    object-fit: contain !important;
+    page-break-inside: avoid;
+  }
+}
