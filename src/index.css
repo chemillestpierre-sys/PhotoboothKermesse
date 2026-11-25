@@ -45,6 +45,281 @@
   padding-left: max(0.75rem, env(safe-area-inset-left));
 }
 
+/* Home Screen Layout (100dvh, no scroll, exact orientation proportions) */
+.home-screen {
+  position: relative;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  display: grid;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.home-top-actions {
+  position: absolute;
+  top: max(0.4rem, env(safe-area-inset-top));
+  left: max(0.75rem, env(safe-area-inset-left));
+  right: max(0.75rem, env(safe-area-inset-right));
+  z-index: 30;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.home-top-actions > * {
+  pointer-events: auto;
+}
+
+.home-bunting {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.home-img {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 6px 18px rgba(15, 23, 42, 0.08));
+}
+
+@media (orientation: landscape) {
+  .home-screen {
+    grid-template-rows: 6% 94%;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .home-content {
+    display: grid;
+    grid-template-columns: 55% 45%;
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    align-items: center;
+  }
+
+  .home-theme-logo-slot {
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5dvh 2vw 2dvh 2.5vw;
+  }
+
+  .home-theme-logo-box {
+    height: 75dvh;
+    max-height: 100%;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .home-right-col {
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2.2dvh;
+    padding: 1.5dvh 2.5vw 2dvh 1vw;
+  }
+
+  .home-brand-block {
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.1dvh;
+    text-align: center;
+  }
+
+  .home-school-logo-box {
+    height: 18dvh;
+    max-height: 18dvh;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .home-title {
+    font-size: clamp(1.35rem, 4.8dvh, 3.25rem);
+    line-height: 1.08;
+  }
+
+  .home-subtitle {
+    font-size: clamp(0.85rem, 2.35dvh, 1.375rem);
+    line-height: 1.25;
+  }
+
+  .home-cta-slot {
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .home-cta-btn {
+    width: 80%;
+    min-height: 15dvh;
+    padding: 1.5dvh 2vw;
+    gap: clamp(0.6rem, 1.4vw, 1.25rem);
+    font-size: clamp(1.2rem, 3.6dvh, 2.4rem);
+  }
+
+  .home-cta-icon {
+    width: clamp(1.5rem, 4.2dvh, 2.75rem);
+    height: clamp(1.5rem, 4.2dvh, 2.75rem);
+  }
+
+  .home-credit {
+    min-height: 0;
+    min-width: 0;
+    font-size: clamp(0.62rem, 1.55dvh, 0.875rem);
+    line-height: 1.25;
+  }
+}
+
+@media (orientation: portrait) {
+  .home-screen {
+    grid-template-rows: 5% 95%;
+    padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+  }
+
+  .home-content {
+    display: grid;
+    grid-template-rows: 47.37% 26.32% 21.05% 5.26%;
+    /* 47.37% of 95% = 45% | 26.32% of 95% = 25% | 21.05% of 95% = 20% | 5.26% of 95% = 5% */
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    justify-items: center;
+    align-items: center;
+  }
+
+  .home-theme-logo-slot {
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1dvh 4vw;
+  }
+
+  .home-theme-logo-box {
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .home-right-col {
+    display: contents;
+  }
+
+  .home-brand-block {
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7dvh;
+    padding: 0 4vw;
+    text-align: center;
+  }
+
+  .home-school-logo-box {
+    height: 11dvh;
+    max-height: 48%;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .home-title {
+    font-size: clamp(1.25rem, 4.4vw, 3rem);
+    line-height: 1.08;
+  }
+
+  .home-subtitle {
+    font-size: clamp(0.8rem, 2.5vw, 1.375rem);
+    line-height: 1.25;
+  }
+
+  .home-cta-slot {
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75dvh 0 1.4dvh 0;
+  }
+
+  .home-cta-btn {
+    width: 80%;
+    height: 100%;
+    max-height: 16.5dvh;
+    padding: 1dvh 3vw;
+    gap: clamp(0.6rem, 2.5vw, 1.25rem);
+    font-size: clamp(1.15rem, 4.2vw, 2.35rem);
+  }
+
+  .home-cta-icon {
+    width: clamp(1.4rem, 4.8vw, 2.75rem);
+    height: clamp(1.4rem, 4.8vw, 2.75rem);
+  }
+
+  .home-credit {
+    min-height: 0;
+    min-width: 0;
+    padding: 0 3vw;
+    font-size: clamp(0.6rem, 1.45dvh, 0.85rem);
+    line-height: 1.2;
+  }
+}
+
 /* Print stylesheet: 15 x 10 cm landscape borderless photo by default */
 @page {
   size: 15cm 10cm;
