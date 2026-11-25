@@ -1,21 +1,183 @@
-import {Check, Maximize2, Printer, RotateCcw, X, ZoomIn} from 'lucide-react';
-import React, {useRef, useState} from 'react';
-import {PendingPhoto} from '../types';
+import {
+  Check,
+  LayoutGrid,
+  Maximize2,
+  Printer,
+  RotateCcw,
+  Share2,
+  Square,
+  X,
+  ZoomIn,
+} from 'lucide-react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {composeMiniatures4Blob} from '../lib/canvas';
+import {PendingPhoto, PrintFormat} from '../types';
 
 interface PreviewScreenProps {
   photo: PendingPhoto;
+  defaultFormat: PrintFormat;
   onRetry: () => void;
-  onPrint: () => void;
+  onPrint: (format: PrintFormat, url: string) => void;
+  onShared: () => void;
   onFinish: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 export const PreviewScreen: React.FC<PreviewScreenProps> = ({
   photo,
+  defaultFormat,
   onRetry,
   onPrint,
+  onShared,
   onFinish,
+  onBusyChange,
 }) => {
+  const [selectedFormat, setSelectedFormat] =
+    useState<PrintFormat>(defaultFormat);
+  const [miniaturesSheet, setMiniaturesSheet] = useState<{
+    photoId: string;
+    blob: Blob;
+    url: string;
+  } | null>(null);
+  const [isGeneratingSheet, setIsGeneratingSheet] = useState(false);
+
   const [isZoomOpen, setIsZoomOpen] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+
+  const miniaturesUrlRef = useRef<string | null>(null);
+
+  // Reset format to admin default for every new photo and clear cached sheet URL
+  useEffect(() => {
+    setSelectedFormat(defaultFormat);
+    setMiniaturesSheet((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+    miniaturesUrlRef.current = null;
+  }, [photo.id, defaultFormat]);
+
+  useEffect(() => {
+    return () => {
+      if (miniaturesUrlRef.current) {
+        URL.revokeObjectURL(miniaturesUrlRef.current);
+        miniaturesUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  // Generate the 2x2 miniatures sheet on demand when selected (never persisted to IndexedDB)
+  useEffect(() => {
+    if (selectedFormat !== 'miniatures4') return;
+    if (miniaturesSheet && miniaturesSheet.photoId === photo.id) return;
+
+    let cancelled = false;
+    setIsGeneratingSheet(true);
+
+    composeMiniatures4Blob(photo.blob)
+      .then((blob) => {
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        if (miniaturesUrlRef.current) {
+          URL.revokeObjectURL(miniaturesUrlRef.current);
+        }
+        miniaturesUrlRef.current = url;
+        setMiniaturesSheet({photoId: photo.id, blob, url});
+      })
+      .catch(() => {
+        // Fallback silently to single photo if generation fails
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsGeneratingSheet(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFormat, photo.id, photo.blob, miniaturesSheet]);
+
+  const activeSheetReady =
+    selectedFormat === 'miniatures4' &&
+    miniaturesSheet !== null &&
+    miniaturesSheet.photoId === photo.id;
+
+  const displayedUrl = activeSheetReady ? miniaturesSheet.url : photo.url;
+  const activeBlob = activeSheetReady ? miniaturesSheet.blob : photo.blob;
+  const shareFileName =
+    selectedFormat === 'miniatures4'
+      ? 'Photo-kermesse-4-miniatures.jpg'
+      : 'Photo-kermesse.jpg';
+
+  const canSharePhoto = useMemo(() => {
+    if (
+      typeof navigator === 'undefined' ||
+      typeof navigator.share !== 'function' ||
+      typeof navigator.canShare !== 'function' ||
+      typeof File === 'undefined'
+    ) {
+      return false;
+    }
+    try {
+      const testFile = new File([activeBlob], shareFileName, {
+        type: 'image/jpeg',
+      });
+      return navigator.canShare({files: [testFile]});
+    } catch {
+      return false;
+    }
+  }, [activeBlob, shareFileName]);
+
+  useEffect(() => {
+    onBusyChange?.(isSharing);
+    return () => {
+      onBusyChange?.(false);
+    };
+  }, [isSharing, onBusyChange]);
+
+  const handlePrintClick = async () => {
+    if (selectedFormat === 'miniatures4') {
+      if (miniaturesSheet && miniaturesSheet.photoId === photo.id) {
+        onPrint('miniatures4', miniaturesSheet.url);
+        return;
+      }
+      setIsGeneratingSheet(true);
+      try {
+        const blob = await composeMiniatures4Blob(photo.blob);
+        const url = URL.createObjectURL(blob);
+        if (miniaturesUrlRef.current) {
+          URL.revokeObjectURL(miniaturesUrlRef.current);
+        }
+        miniaturesUrlRef.current = url;
+        setMiniaturesSheet({photoId: photo.id, blob, url});
+        onPrint('miniatures4', url);
+      } finally {
+        setIsGeneratingSheet(false);
+      }
+      return;
+    }
+    onPrint('single', photo.url);
+  };
+
+  const handleShare = async () => {
+    if (!canSharePhoto || isSharing) return;
+    if (selectedFormat === 'miniatures4' && !activeSheetReady) return;
+
+    const file = new File([activeBlob], shareFileName, {
+      type: 'image/jpeg',
+    });
+    if (!navigator.canShare({files: [file]})) return;
+
+    setIsSharing(true);
+    try {
+      await navigator.share({files: [file]});
+      onShared();
+    } catch {
+      // User cancelled or share aborted — stay silently on preview screen
+    } finally {
+      setIsSharing(false);
+    }
+  };
 
   // Pinch-to-zoom & pan state
   const [scale, setScale] = useState(1);
@@ -69,7 +231,6 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
     } else if (e.touches.length === 1) {
       const now = Date.now();
       if (now - gestureRef.current.lastTap < 280) {
-        // Double tap toggles zoom
         if (scale > 1.1) {
           setScale(1);
           setTranslate({x: 0, y: 0});
@@ -142,9 +303,17 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
           className="group relative flex h-full w-full min-h-0 min-w-0 max-h-full max-w-full items-center justify-center overflow-hidden focus:outline-none">
           <div className="relative flex h-full w-full min-h-0 min-w-0 items-center justify-center">
             <img
-              src={photo.url}
-              alt="Votre photo de la kermesse"
-              className="max-h-full max-w-full rounded-2xl bg-white object-contain shadow-[0_12px_36px_rgba(15,23,42,0.14)] ring-1 ring-slate-900/10"
+              src={displayedUrl}
+              alt={
+                selectedFormat === 'miniatures4'
+                  ? 'Planche 4 miniatures de la kermesse'
+                  : 'Votre photo de la kermesse'
+              }
+              className={`max-h-full max-w-full rounded-2xl bg-white object-contain shadow-[0_12px_36px_rgba(15,23,42,0.14)] ring-1 ring-slate-900/10 transition-opacity ${
+                isGeneratingSheet && selectedFormat === 'miniatures4'
+                  ? 'opacity-65'
+                  : 'opacity-100'
+              }`}
             />
             <span className="pointer-events-none absolute right-2 bottom-2 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900/70 text-white backdrop-blur-sm transition group-hover:bg-slate-900 sm:right-3 sm:bottom-3 sm:h-11 sm:w-11">
               <Maximize2 className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -153,27 +322,80 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
         </button>
       </div>
 
-      {/* Three tactile action buttons always anchored at the bottom */}
-      <div className="mx-auto mt-2 grid w-full max-w-4xl shrink-0 grid-cols-3 gap-2 sm:mt-3 sm:gap-4">
+      {/* Format selector: 1 photo / 4 miniatures */}
+      <div className="mx-auto mt-1.5 grid w-full max-w-md shrink-0 grid-cols-2 gap-1.5 rounded-2xl bg-slate-200/80 p-1.5 sm:mt-2 sm:gap-2">
+        <button
+          type="button"
+          onClick={() => setSelectedFormat('single')}
+          aria-pressed={selectedFormat === 'single'}
+          style={{
+            minHeight: 'clamp(2.65rem, 6.8dvh, 3.35rem)',
+            fontSize: 'clamp(0.82rem, 2.3vmin, 1.05rem)',
+          }}
+          className={`flex items-center justify-center gap-2 rounded-xl px-3 py-1.5 font-display font-bold transition active:scale-[0.98] whitespace-nowrap ${
+            selectedFormat === 'single'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}>
+          <Square className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" strokeWidth={2.4} />
+          <span>1 photo</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSelectedFormat('miniatures4')}
+          aria-pressed={selectedFormat === 'miniatures4'}
+          style={{
+            minHeight: 'clamp(2.65rem, 6.8dvh, 3.35rem)',
+            fontSize: 'clamp(0.82rem, 2.3vmin, 1.05rem)',
+          }}
+          className={`flex items-center justify-center gap-2 rounded-xl px-3 py-1.5 font-display font-bold transition active:scale-[0.98] whitespace-nowrap ${
+            selectedFormat === 'miniatures4'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}>
+          <LayoutGrid
+            className="h-4 w-4 shrink-0 sm:h-5 sm:w-5"
+            strokeWidth={2.4}
+          />
+          <span>4 miniatures</span>
+        </button>
+      </div>
+
+      {/* Tactile action buttons always anchored at the bottom */}
+      <div
+        className={`mx-auto mt-2 grid w-full shrink-0 gap-2 sm:mt-2.5 sm:gap-3.5 ${
+          canSharePhoto ? 'max-w-5xl grid-cols-4' : 'max-w-4xl grid-cols-3'
+        }`}>
         <button
           type="button"
           onClick={onRetry}
           style={{
-            minHeight: 'clamp(3.5rem, 10.5dvh, 5.25rem)',
+            minHeight: 'clamp(3.35rem, 9.8dvh, 5rem)',
             padding:
-              'clamp(0.45rem, 1.3dvh, 0.9rem) clamp(0.35rem, 1.5vw, 1.25rem)',
+              'clamp(0.4rem, 1.2dvh, 0.85rem) clamp(0.25rem, 1.2vw, 1.15rem)',
           }}
-          className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-white text-slate-800 shadow-[0_5px_0_0_#CBD5E1] ring-1 ring-slate-200 transition hover:bg-slate-50 active:translate-y-1 active:shadow-[0_2px_0_0_#CBD5E1] sm:flex-row sm:gap-2.5 sm:rounded-3xl">
+          className={`flex flex-col items-center justify-center gap-1 rounded-2xl bg-white text-slate-800 shadow-[0_5px_0_0_#CBD5E1] ring-1 ring-slate-200 transition hover:bg-slate-50 active:translate-y-1 active:shadow-[0_2px_0_0_#CBD5E1] sm:gap-2 sm:rounded-3xl ${
+            canSharePhoto ? 'md:flex-row' : 'sm:flex-row'
+          }`}>
           <RotateCcw
             style={{
-              width: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
-              height: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
+              width: canSharePhoto
+                ? 'clamp(1.1rem, 2.9vmin, 1.55rem)'
+                : 'clamp(1.2rem, 3.1vmin, 1.65rem)',
+              height: canSharePhoto
+                ? 'clamp(1.1rem, 2.9vmin, 1.55rem)'
+                : 'clamp(1.2rem, 3.1vmin, 1.65rem)',
             }}
             className="shrink-0 text-slate-700"
             strokeWidth={2.4}
           />
           <span
-            style={{fontSize: 'clamp(0.78rem, 2.5vmin, 1.25rem)'}}
+            style={{
+              fontSize: canSharePhoto
+                ? 'clamp(0.66rem, 2.25vmin, 1.2rem)'
+                : 'clamp(0.78rem, 2.45vmin, 1.25rem)',
+            }}
             className="font-display font-extrabold whitespace-nowrap">
             Recommencer
           </span>
@@ -181,47 +403,97 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
 
         <button
           type="button"
-          onClick={onPrint}
+          onClick={() => void handlePrintClick()}
+          disabled={selectedFormat === 'miniatures4' && isGeneratingSheet}
           style={{
-            minHeight: 'clamp(3.5rem, 10.5dvh, 5.25rem)',
+            minHeight: 'clamp(3.35rem, 9.8dvh, 5rem)',
             padding:
-              'clamp(0.45rem, 1.3dvh, 0.9rem) clamp(0.35rem, 1.5vw, 1.25rem)',
+              'clamp(0.4rem, 1.2dvh, 0.85rem) clamp(0.25rem, 1.2vw, 1.15rem)',
           }}
-          className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-[#0EA5E9] text-white shadow-[0_5px_0_0_#0369A1] transition hover:bg-[#0284C7] active:translate-y-1 active:shadow-[0_2px_0_0_#0369A1] sm:flex-row sm:gap-2.5 sm:rounded-3xl">
+          className={`flex flex-col items-center justify-center gap-1 rounded-2xl bg-[#0EA5E9] text-white shadow-[0_5px_0_0_#0369A1] transition hover:bg-[#0284C7] active:translate-y-1 active:shadow-[0_2px_0_0_#0369A1] disabled:opacity-75 sm:gap-2 sm:rounded-3xl ${
+            canSharePhoto ? 'md:flex-row' : 'sm:flex-row'
+          }`}>
           <Printer
             style={{
-              width: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
-              height: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
+              width: canSharePhoto
+                ? 'clamp(1.1rem, 2.9vmin, 1.55rem)'
+                : 'clamp(1.2rem, 3.1vmin, 1.65rem)',
+              height: canSharePhoto
+                ? 'clamp(1.1rem, 2.9vmin, 1.55rem)'
+                : 'clamp(1.2rem, 3.1vmin, 1.65rem)',
             }}
             className="shrink-0"
             strokeWidth={2.4}
           />
           <span
-            style={{fontSize: 'clamp(0.78rem, 2.5vmin, 1.25rem)'}}
+            style={{
+              fontSize: canSharePhoto
+                ? 'clamp(0.66rem, 2.25vmin, 1.2rem)'
+                : 'clamp(0.78rem, 2.45vmin, 1.25rem)',
+            }}
             className="font-display font-extrabold whitespace-nowrap">
             Imprimer
           </span>
         </button>
 
+        {canSharePhoto && (
+          <button
+            type="button"
+            onClick={() => void handleShare()}
+            disabled={
+              isSharing || (selectedFormat === 'miniatures4' && !activeSheetReady)
+            }
+            style={{
+              minHeight: 'clamp(3.35rem, 9.8dvh, 5rem)',
+              padding:
+                'clamp(0.4rem, 1.2dvh, 0.85rem) clamp(0.25rem, 1.2vw, 1.15rem)',
+            }}
+            className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-[#F59E0B] text-white shadow-[0_5px_0_0_#B45309] transition hover:bg-[#D97706] active:translate-y-1 active:shadow-[0_2px_0_0_#B45309] disabled:opacity-70 sm:gap-2 sm:rounded-3xl md:flex-row">
+            <Share2
+              style={{
+                width: 'clamp(1.1rem, 2.9vmin, 1.55rem)',
+                height: 'clamp(1.1rem, 2.9vmin, 1.55rem)',
+              }}
+              className="shrink-0"
+              strokeWidth={2.4}
+            />
+            <span
+              style={{fontSize: 'clamp(0.66rem, 2.25vmin, 1.2rem)'}}
+              className="font-display font-extrabold whitespace-nowrap">
+              Partager
+            </span>
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onFinish}
           style={{
-            minHeight: 'clamp(3.5rem, 10.5dvh, 5.25rem)',
+            minHeight: 'clamp(3.35rem, 9.8dvh, 5rem)',
             padding:
-              'clamp(0.45rem, 1.3dvh, 0.9rem) clamp(0.35rem, 1.5vw, 1.25rem)',
+              'clamp(0.4rem, 1.2dvh, 0.85rem) clamp(0.25rem, 1.2vw, 1.15rem)',
           }}
-          className="flex flex-col items-center justify-center gap-1 rounded-2xl bg-[#10B981] text-white shadow-[0_5px_0_0_#047857] transition hover:bg-[#059669] active:translate-y-1 active:shadow-[0_2px_0_0_#047857] sm:flex-row sm:gap-2.5 sm:rounded-3xl">
+          className={`flex flex-col items-center justify-center gap-1 rounded-2xl bg-[#10B981] text-white shadow-[0_5px_0_0_#047857] transition hover:bg-[#059669] active:translate-y-1 active:shadow-[0_2px_0_0_#047857] sm:gap-2 sm:rounded-3xl ${
+            canSharePhoto ? 'md:flex-row' : 'sm:flex-row'
+          }`}>
           <Check
             style={{
-              width: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
-              height: 'clamp(1.2rem, 3.2vmin, 1.65rem)',
+              width: canSharePhoto
+                ? 'clamp(1.1rem, 2.9vmin, 1.55rem)'
+                : 'clamp(1.2rem, 3.1vmin, 1.65rem)',
+              height: canSharePhoto
+                ? 'clamp(1.1rem, 2.9vmin, 1.55rem)'
+                : 'clamp(1.2rem, 3.1vmin, 1.65rem)',
             }}
             className="shrink-0"
             strokeWidth={2.8}
           />
           <span
-            style={{fontSize: 'clamp(0.78rem, 2.5vmin, 1.25rem)'}}
+            style={{
+              fontSize: canSharePhoto
+                ? 'clamp(0.66rem, 2.25vmin, 1.2rem)'
+                : 'clamp(0.78rem, 2.45vmin, 1.25rem)',
+            }}
             className="font-display font-extrabold whitespace-nowrap">
             Terminer
           </span>
@@ -236,7 +508,7 @@ export const PreviewScreen: React.FC<PreviewScreenProps> = ({
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}>
           <img
-            src={photo.url}
+            src={displayedUrl}
             alt="Photo en plein écran"
             draggable={false}
             style={{

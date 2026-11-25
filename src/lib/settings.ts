@@ -21,6 +21,7 @@ export function getDefaultSettings(): PhotoboothSettings {
     cameraFacing: 'environment',
     cameraDeviceId: '',
     photoOrientation: 'landscape',
+    defaultPhotoFormat: 'single',
     adminPin: '1234',
   };
 }
@@ -66,6 +67,10 @@ export function loadSettings(): PhotoboothSettings {
             : '',
         photoOrientation:
           parsed.photoOrientation === 'portrait' ? 'portrait' : 'landscape',
+        defaultPhotoFormat:
+          parsed.defaultPhotoFormat === 'miniatures4'
+            ? 'miniatures4'
+            : 'single',
         adminPin:
           typeof parsed.adminPin === 'string' &&
           /^\d{4,8}$/.test(parsed.adminPin)
@@ -108,6 +113,7 @@ export function loadSettings(): PhotoboothSettings {
         cameraFacing: 'environment',
         cameraDeviceId: '',
         photoOrientation: 'landscape',
+        defaultPhotoFormat: 'single',
         adminPin:
           typeof parsed.adminPin === 'string' &&
           /^\d{4,8}$/.test(parsed.adminPin)

@@ -181,3 +181,100 @@ export async function composePhotoBlob(
     );
   });
 }
+
+function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Impossible de charger la photo'));
+    };
+    img.src = url;
+  });
+}
+
+export async function composeMiniatures4Blob(sourceBlob: Blob): Promise<Blob> {
+  const img = await loadImageFromBlob(sourceBlob);
+  const srcW = img.naturalWidth || 1800;
+  const srcH = img.naturalHeight || 1200;
+  const isPortrait = srcH > srcW;
+
+  const sheetW = isPortrait ? 1200 : 1800;
+  const sheetH = isPortrait ? 1800 : 1200;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = sheetW;
+  canvas.height = sheetH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Contexte canvas indisponible');
+  }
+
+  // White paper background
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, sheetW, sheetH);
+
+  const cellW = sheetW / 2;
+  const cellH = sheetH / 2;
+  const margin = 24;
+  const maxDrawW = cellW - margin * 2;
+  const maxDrawH = cellH - margin * 2;
+
+  const scale = Math.min(maxDrawW / srcW, maxDrawH / srcH);
+  const drawW = srcW * scale;
+  const drawH = srcH * scale;
+
+  for (let row = 0; row < 2; row += 1) {
+    for (let col = 0; col < 2; col += 1) {
+      const cellX = col * cellW;
+      const cellY = row * cellH;
+      const dx = cellX + (cellW - drawW) / 2;
+      const dy = cellY + (cellH - drawH) / 2;
+
+      ctx.drawImage(img, dx, dy, drawW, drawH);
+
+      // Very subtle hairline around the miniature so the white bottom banner stays crisp on white paper
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.28)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(dx, dy, drawW, drawH);
+    }
+  }
+
+  // Discreet light-gray scissor cut lines between the 2x2 cells
+  ctx.save();
+  ctx.strokeStyle = '#CBD5E1';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([16, 12]);
+
+  // Vertical center cut line
+  ctx.beginPath();
+  ctx.moveTo(sheetW / 2, 12);
+  ctx.lineTo(sheetW / 2, sheetH - 12);
+  ctx.stroke();
+
+  // Horizontal center cut line
+  ctx.beginPath();
+  ctx.moveTo(12, sheetH / 2);
+  ctx.lineTo(sheetW - 12, sheetH / 2);
+  ctx.stroke();
+  ctx.restore();
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error('Échec de génération JPEG'));
+          return;
+        }
+        resolve(blob);
+      },
+      'image/jpeg',
+      0.92,
+    );
+  });
+}

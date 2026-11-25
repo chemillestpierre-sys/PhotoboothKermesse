@@ -1,4 +1,4 @@
-import {PhotoRecord} from '../types';
+import {PhotoRecord, PrintFormat} from '../types';
 
 const DB_NAME = 'kermesse_photobooth_db';
 const DB_VERSION = 1;
@@ -54,7 +54,10 @@ export async function getAllPhotos(): Promise<PhotoRecord[]> {
   });
 }
 
-export async function incrementPhotoPrintCount(id: string): Promise<number> {
+export async function incrementPhotoPrintCount(
+  id: string,
+  format: PrintFormat = 'single',
+): Promise<number> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -65,8 +68,13 @@ export async function incrementPhotoPrintCount(id: string): Promise<number> {
     getReq.onsuccess = () => {
       const existing = getReq.result as PhotoRecord | undefined;
       if (existing) {
-        updatedCount = (existing.printCount || 0) + 1;
-        store.put({...existing, printCount: updatedCount});
+        if (format === 'miniatures4') {
+          updatedCount = (existing.miniaturesPrintCount || 0) + 1;
+          store.put({...existing, miniaturesPrintCount: updatedCount});
+        } else {
+          updatedCount = (existing.printCount || 0) + 1;
+          store.put({...existing, printCount: updatedCount});
+        }
       }
     };
     tx.oncomplete = () => {

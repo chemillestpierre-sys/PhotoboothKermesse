@@ -4,6 +4,8 @@ export type CameraFacing = 'user' | 'environment';
 
 export type PhotoOrientation = 'landscape' | 'portrait';
 
+export type PrintFormat = 'single' | 'miniatures4';
+
 export interface PhotoboothSettings {
   bannerText: string;
   bannerDate: string;
@@ -13,6 +15,7 @@ export interface PhotoboothSettings {
   cameraFacing: CameraFacing;
   cameraDeviceId: string;
   photoOrientation: PhotoOrientation;
+  defaultPhotoFormat: PrintFormat;
   adminPin: string;
 }
 
@@ -21,6 +24,8 @@ export interface PhotoRecord {
   createdAt: number;
   blob: Blob;
   printCount: number;
+  miniaturesPrintCount?: number;
+  shareCount?: number;
 }
 
 export interface PendingPhoto {
@@ -29,4 +34,6 @@ export interface PendingPhoto {
   blob: Blob;
   url: string;
   printCount: number;
+  miniaturesPrintCount: number;
+  shareCount: number;
 }

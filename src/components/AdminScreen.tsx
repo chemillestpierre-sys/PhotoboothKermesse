@@ -5,6 +5,7 @@ import {
   Check,
   CheckCircle2,
   Images,
+  LayoutGrid,
   Minus,
   Plus,
   Printer,
@@ -12,6 +13,7 @@ import {
   RotateCcw,
   Settings,
   Smartphone,
+  Square,
   Trash2,
   WifiOff,
   X,
@@ -25,13 +27,13 @@ import {
 } from '../lib/db';
 import {formatFrenchDate, getDefaultSettings} from '../lib/settings';
 import {exportPhotosAsZip} from '../lib/zipExport';
-import {PhotoRecord, PhotoboothSettings} from '../types';
+import {PhotoRecord, PhotoboothSettings, PrintFormat} from '../types';
 import {PWAInstallButton} from './PWAInstallButton';
 
 interface AdminScreenProps {
   settings: PhotoboothSettings;
   onUpdateSettings: (next: PhotoboothSettings) => void;
-  onPrintPhoto: (photo: PhotoRecord) => Promise<void>;
+  onPrintPhoto: (photo: PhotoRecord, format: PrintFormat) => Promise<void>;
   onClose: () => void;
   onBusyChange?: (busy: boolean) => void;
 }
@@ -52,7 +54,9 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
   const [loadingPhotos, setLoadingPhotos] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
 
-  // Confirmations
+  // Confirmations & modals
+  const [reprintTarget, setReprintTarget] = useState<PhotoWithUrl | null>(null);
+  const [isReprinting, setIsReprinting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PhotoWithUrl | null>(null);
   const [clearStep, setClearStep] = useState<0 | 1 | 2>(0);
   const [lightboxPhoto, setLightboxPhoto] = useState<PhotoWithUrl | null>(null);
@@ -156,8 +160,18 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
     onBusyChange?.(isExporting);
   }, [isExporting, onBusyChange]);
 
-  const totalPrints = useMemo(
+  const totalSinglePrints = useMemo(
     () => photos.reduce((acc, p) => acc + (p.printCount || 0), 0),
+    [photos],
+  );
+
+  const totalMiniaturesPrints = useMemo(
+    () => photos.reduce((acc, p) => acc + (p.miniaturesPrintCount || 0), 0),
+    [photos],
+  );
+
+  const totalShares = useMemo(
+    () => photos.reduce((acc, p) => acc + (p.shareCount || 0), 0),
     [photos],
   );
 
@@ -200,13 +214,27 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
     }
   };
 
-  const handleReprint = async (photo: PhotoWithUrl) => {
-    await onPrintPhoto(photo);
-    setPhotos((prev) =>
-      prev.map((p) =>
-        p.id === photo.id ? {...p, printCount: (p.printCount || 0) + 1} : p,
-      ),
-    );
+  const handleReprint = async (photo: PhotoWithUrl, format: PrintFormat) => {
+    if (isReprinting) return;
+    setIsReprinting(true);
+    try {
+      await onPrintPhoto(photo, format);
+      setPhotos((prev) =>
+        prev.map((p) => {
+          if (p.id !== photo.id) return p;
+          if (format === 'miniatures4') {
+            return {
+              ...p,
+              miniaturesPrintCount: (p.miniaturesPrintCount || 0) + 1,
+            };
+          }
+          return {...p, printCount: (p.printCount || 0) + 1};
+        }),
+      );
+      setReprintTarget(null);
+    } finally {
+      setIsReprinting(false);
+    }
   };
 
   const handleSaveSettings = (e: React.FormEvent) => {
@@ -343,8 +371,18 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
           </span>
           <span aria-hidden="true">·</span>
           <span>
-            <strong className="text-slate-900">{totalPrints}</strong>{' '}
-            {totalPrints > 1 ? 'impressions' : 'impression'}
+            <strong className="text-slate-900">{totalSinglePrints}</strong>{' '}
+            « 1 photo »
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            <strong className="text-slate-900">{totalMiniaturesPrints}</strong>{' '}
+            « 4 min. »
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            <strong className="text-slate-900">{totalShares}</strong>{' '}
+            {totalShares > 1 ? 'partages' : 'partage'}
           </span>
         </div>
       </div>
@@ -365,8 +403,22 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
                 <strong className="text-slate-900">{photos.length}</strong>{' '}
                 {photos.length > 1 ? 'photos enregistrées' : 'photo enregistrée'}
                 {' · '}
-                <strong className="text-slate-900">{totalPrints}</strong>{' '}
-                {totalPrints > 1 ? 'impressions au total' : 'impression au total'}
+                <strong className="text-slate-900">
+                  {totalSinglePrints}
+                </strong>{' '}
+                {totalSinglePrints > 1
+                  ? 'impressions « 1 photo »'
+                  : 'impression « 1 photo »'}
+                {' · '}
+                <strong className="text-slate-900">
+                  {totalMiniaturesPrints}
+                </strong>{' '}
+                {totalMiniaturesPrints > 1
+                  ? 'impressions « 4 miniatures »'
+                  : 'impression « 4 miniatures »'}
+                {' · '}
+                <strong className="text-slate-900">{totalShares}</strong>{' '}
+                {totalShares > 1 ? 'partages' : 'partage'}
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
@@ -439,18 +491,31 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
                         </span>
                       </div>
 
-                      <div className="text-sm font-medium text-slate-600 tabular-nums">
-                        {photo.printCount === 0
-                          ? 'Non imprimée'
-                          : photo.printCount === 1
-                            ? 'Imprimée 1 fois'
-                            : `Imprimée ${photo.printCount} fois`}
+                      <div className="space-y-0.5 text-xs font-medium text-slate-600 tabular-nums sm:text-sm">
+                        <div>
+                          Impressions « 1 photo » :{' '}
+                          <strong className="text-slate-900">
+                            {photo.printCount || 0}
+                          </strong>
+                        </div>
+                        <div>
+                          Impressions « 4 miniatures » :{' '}
+                          <strong className="text-slate-900">
+                            {photo.miniaturesPrintCount || 0}
+                          </strong>
+                        </div>
+                        <div>
+                          Partages :{' '}
+                          <strong className="text-slate-900">
+                            {photo.shareCount || 0}
+                          </strong>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2 pt-1">
                         <button
                           type="button"
-                          onClick={() => void handleReprint(photo)}
+                          onClick={() => setReprintTarget(photo)}
                           className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-sky-50 px-3 py-2 text-sm font-bold text-sky-700 transition hover:bg-sky-100 active:scale-95">
                           <Printer className="h-4 w-4 shrink-0" />
                           <span>Réimprimer</span>
@@ -575,6 +640,46 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
                     }`}>
                     <span className="inline-block h-5 w-3.5 rounded-[3px] border-2 border-current" />
                     <span>Portrait</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Format par défaut */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                <div>
+                  <div className="text-base font-semibold text-slate-900">
+                    Format par défaut
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    Sélectionné automatiquement pour chaque nouvelle photo
+                  </div>
+                </div>
+                <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({...draft, defaultPhotoFormat: 'single'})
+                    }
+                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                      draft.defaultPhotoFormat !== 'miniatures4'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600'
+                    }`}>
+                    <Square className="h-4 w-4" />
+                    <span>1 photo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({...draft, defaultPhotoFormat: 'miniatures4'})
+                    }
+                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                      draft.defaultPhotoFormat === 'miniatures4'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600'
+                    }`}>
+                    <LayoutGrid className="h-4 w-4" />
+                    <span>4 miniatures</span>
                   </button>
                 </div>
               </div>
@@ -907,6 +1012,52 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
           </form>
         )}
       </div>
+
+      {/* Reprint format chooser */}
+      {reprintTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-6 backdrop-blur-sm"
+          onClick={() => !isReprinting && setReprintTarget(null)}>
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl sm:p-7"
+            onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-2xl font-bold text-slate-900">
+              Réimprimer cette photo
+            </h3>
+            <p className="mt-1.5 text-sm text-slate-600 sm:text-base">
+              Choisissez le format d’impression pour la photo prise à{' '}
+              {formatTime(reprintTarget.createdAt)} :
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={isReprinting}
+                onClick={() => void handleReprint(reprintTarget, 'single')}
+                className="flex min-h-[76px] flex-col items-center justify-center gap-2 rounded-2xl bg-[#0EA5E9] px-4 py-3 font-display text-base font-extrabold text-white shadow-sm transition hover:bg-[#0284C7] active:scale-95 disabled:opacity-60">
+                <Square className="h-6 w-6" />
+                <span>1 photo</span>
+              </button>
+              <button
+                type="button"
+                disabled={isReprinting}
+                onClick={() =>
+                  void handleReprint(reprintTarget, 'miniatures4')
+                }
+                className="flex min-h-[76px] flex-col items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 font-display text-base font-extrabold text-white shadow-sm transition hover:bg-slate-800 active:scale-95 disabled:opacity-60">
+                <LayoutGrid className="h-6 w-6" />
+                <span>4 miniatures</span>
+              </button>
+            </div>
+            <button
+              type="button"
+              disabled={isReprinting}
+              onClick={() => setReprintTarget(null)}
+              className="mt-4 w-full min-h-[48px] rounded-2xl bg-slate-100 font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-60">
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Single photo delete confirmation */}
       {deleteTarget && (

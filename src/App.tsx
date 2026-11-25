@@ -5,6 +5,7 @@ import {HomeScreen} from './components/HomeScreen';
 import {PinModal} from './components/PinModal';
 import {PreviewScreen} from './components/PreviewScreen';
 import {PrintSheet} from './components/PrintSheet';
+import {composeMiniatures4Blob} from './lib/canvas';
 import {incrementPhotoPrintCount, savePhoto} from './lib/db';
 import {loadSettings, saveSettings} from './lib/settings';
 import {
@@ -12,6 +13,7 @@ import {
   PendingPhoto,
   PhotoRecord,
   PhotoboothSettings,
+  PrintFormat,
 } from './types';
 
 function createPhotoId(): string {
@@ -56,6 +58,8 @@ export default function App() {
       blob,
       url,
       printCount: 0,
+      miniaturesPrintCount: 0,
+      shareCount: 0,
     });
     setScreen('preview');
   }, []);
@@ -68,6 +72,8 @@ export default function App() {
         createdAt: current.createdAt,
         blob: current.blob,
         printCount: current.printCount,
+        miniaturesPrintCount: current.miniaturesPrintCount,
+        shareCount: current.shareCount,
       });
       revokePendingPhoto();
     }
@@ -88,25 +94,46 @@ export default function App() {
     });
   }, []);
 
-  const handlePrintFromPreview = useCallback(() => {
+  const handlePrintFromPreview = useCallback(
+    (format: PrintFormat, url: string) => {
+      triggerBrowserPrint(url);
+      setPendingPhoto((prev) => {
+        if (!prev) return null;
+        if (format === 'miniatures4') {
+          return {
+            ...prev,
+            miniaturesPrintCount: prev.miniaturesPrintCount + 1,
+          };
+        }
+        return {...prev, printCount: prev.printCount + 1};
+      });
+    },
+    [triggerBrowserPrint],
+  );
+
+  const handleSharedFromPreview = useCallback(() => {
     setPendingPhoto((prev) => {
       if (!prev) return null;
-      triggerBrowserPrint(prev.url);
-      return {...prev, printCount: prev.printCount + 1};
+      return {...prev, shareCount: prev.shareCount + 1};
     });
-  }, [triggerBrowserPrint]);
+  }, []);
 
   const adminPrintUrlRef = useRef<string | null>(null);
 
   const handlePrintFromAdmin = useCallback(
-    async (record: PhotoRecord) => {
+    async (record: PhotoRecord, format: PrintFormat = 'single') => {
+      const blobToPrint =
+        format === 'miniatures4'
+          ? await composeMiniatures4Blob(record.blob)
+          : record.blob;
+
       if (adminPrintUrlRef.current) {
         URL.revokeObjectURL(adminPrintUrlRef.current);
       }
-      const url = URL.createObjectURL(record.blob);
+      const url = URL.createObjectURL(blobToPrint);
       adminPrintUrlRef.current = url;
       triggerBrowserPrint(url);
-      await incrementPhotoPrintCount(record.id);
+      await incrementPhotoPrintCount(record.id, format);
     },
     [triggerBrowserPrint],
   );
@@ -198,9 +225,12 @@ export default function App() {
       {screen === 'preview' && pendingPhoto && (
         <PreviewScreen
           photo={pendingPhoto}
+          defaultFormat={settings.defaultPhotoFormat}
           onRetry={handleRetryPreview}
           onPrint={handlePrintFromPreview}
+          onShared={handleSharedFromPreview}
           onFinish={() => void handleFinishPreview()}
+          onBusyChange={setIsBusy}
         />
       )}
 
