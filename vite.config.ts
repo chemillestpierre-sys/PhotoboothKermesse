@@ -12,6 +12,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        useCredentials: true,
         includeAssets: [
           'apple-touch-icon.png',
           'icon.svg',
@@ -22,6 +23,7 @@ export default defineConfig(() => {
         ],
         manifest: {
           id: '/',
+          lang: 'fr',
           name: 'Photobooth Kermesse',
           short_name: 'Photobooth',
           description:
@@ -30,6 +32,7 @@ export default defineConfig(() => {
           background_color: '#FAF8F4',
           display: 'fullscreen',
           display_override: ['fullscreen', 'standalone'],
+          orientation: 'any',
           start_url: '/',
           scope: '/',
           icons: [

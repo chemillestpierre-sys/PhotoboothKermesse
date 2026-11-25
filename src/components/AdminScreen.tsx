@@ -11,12 +11,13 @@ import {
   RefreshCw,
   RotateCcw,
   Settings,
+  Smartphone,
   Trash2,
   WifiOff,
   X,
 } from 'lucide-react';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {useOfflineReady} from '../hooks/usePWAInstall';
+import {useOfflineReady, usePWAInstall} from '../hooks/usePWAInstall';
 import {
   clearAllPhotos,
   deletePhoto,
@@ -70,6 +71,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
 
   const {isOfflineReady, checking: checkingOffline, refresh: refreshOffline} =
     useOfflineReady();
+  const {isInstalled: isInstalledAppMode} = usePWAInstall();
 
   const activeUrlsRef = useRef<string[]>([]);
 
@@ -251,13 +253,31 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          {/* Installed standalone/fullscreen mode indicator */}
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold sm:px-3.5 sm:text-sm">
+            <Smartphone
+              className={`h-4 w-4 shrink-0 sm:h-5 sm:w-5 ${
+                isInstalledAppMode ? 'text-emerald-600' : 'text-amber-600'
+              }`}
+            />
+            <span className="text-slate-700">
+              Mode application installée :{' '}
+              <strong
+                className={
+                  isInstalledAppMode ? 'text-emerald-700' : 'text-amber-700'
+                }>
+                {isInstalledAppMode ? 'oui' : 'non'}
+              </strong>
+            </span>
+          </div>
+
           {/* Offline readiness indicator */}
-          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-semibold">
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold sm:px-3.5 sm:text-sm">
             {isOfflineReady ? (
-              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 sm:h-5 sm:w-5" />
             ) : (
-              <WifiOff className="h-5 w-5 shrink-0 text-amber-600" />
+              <WifiOff className="h-4 w-4 shrink-0 text-amber-600 sm:h-5 sm:w-5" />
             )}
             <span className="text-slate-700">
               Prête pour le hors ligne :{' '}

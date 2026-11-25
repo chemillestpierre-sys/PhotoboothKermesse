@@ -12,11 +12,20 @@ export function usePWAInstall() {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
+    const standaloneMedia = window.matchMedia('(display-mode: standalone)');
+    const fullscreenMedia = window.matchMedia('(display-mode: fullscreen)');
+
+    const checkIsInstalled = () =>
+      standaloneMedia.matches ||
+      fullscreenMedia.matches ||
       (window.navigator as unknown as {standalone?: boolean}).standalone ===
         true;
-    setIsInstalled(isStandalone);
+
+    setIsInstalled(checkIsInstalled());
+
+    const handleDisplayModeChange = () => {
+      setIsInstalled(checkIsInstalled());
+    };
 
     const ua = window.navigator.userAgent.toLowerCase();
     const isIOSDevice =
@@ -34,10 +43,14 @@ export function usePWAInstall() {
       setDeferredPrompt(null);
     };
 
+    standaloneMedia.addEventListener('change', handleDisplayModeChange);
+    fullscreenMedia.addEventListener('change', handleDisplayModeChange);
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
+      standaloneMedia.removeEventListener('change', handleDisplayModeChange);
+      fullscreenMedia.removeEventListener('change', handleDisplayModeChange);
       window.removeEventListener(
         'beforeinstallprompt',
         handleBeforeInstallPrompt,
