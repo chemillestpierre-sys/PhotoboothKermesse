@@ -11,6 +11,7 @@ export type CaptureMode = 'classic' | 'selfie';
 export interface PhotoboothSettings {
   bannerText: string;
   bannerDate: string;
+  showBannerLogos: boolean;
   countdownSeconds: number;
   previewTimeoutSeconds: number;
   otherTimeoutSeconds: number;

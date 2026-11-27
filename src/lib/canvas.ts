@@ -1,4 +1,37 @@
+import themeLogoUrl from '../assets/images/logo_graines_artistes_1795511260781.jpg';
 import {PhotoboothSettings} from '../types';
+
+const SCHOOL_LOGO_URL = '/logo-ecole.svg';
+const logoImageCache = new Map<string, Promise<HTMLImageElement | null>>();
+
+function loadLogoImage(src: string): Promise<HTMLImageElement | null> {
+  const existing = logoImageCache.get(src);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = new Promise<HTMLImageElement | null>((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      if (typeof img.decode === 'function') {
+        img
+          .decode()
+          .catch(() => {})
+          .finally(() => resolve(img));
+      } else {
+        resolve(img);
+      }
+    };
+    img.onerror = () => {
+      logoImageCache.delete(src);
+      resolve(null);
+    };
+    img.src = src;
+  });
+
+  logoImageCache.set(src, promise);
+  return promise;
+}
 
 export interface ViewfinderCropRects {
   videoRect: DOMRect;
@@ -11,14 +44,24 @@ export async function composePhotoBlob(
   settings: PhotoboothSettings,
   cropRects?: ViewfinderCropRects | null,
 ): Promise<Blob> {
-  if (document.fonts?.ready) {
-    await document.fonts.ready;
-  }
+  const showLogos = settings.showBannerLogos !== false;
+
+  const [, logos] = await Promise.all([
+    document.fonts?.ready ?? Promise.resolve(),
+    showLogos
+      ? Promise.all([
+          loadLogoImage(SCHOOL_LOGO_URL),
+          loadLogoImage(themeLogoUrl),
+        ])
+      : Promise.resolve([null, null] as const),
+  ]);
+
+  const [schoolLogo, themeLogo] = logos;
 
   const isLandscape = settings.photoOrientation !== 'portrait';
   const photoWidth = isLandscape ? 1800 : 1200;
   const photoHeight = isLandscape ? 1200 : 1800;
-  const bannerHeight = isLandscape ? 116 : 196;
+  const bannerHeight = Math.round(photoHeight * 0.14);
   const imageAreaHeight = photoHeight - bannerHeight;
 
   const canvas = document.createElement('canvas');
@@ -107,7 +150,7 @@ export async function composePhotoBlob(
   );
   ctx.restore();
 
-  // Sober white bottom banner
+  // Sober white bottom banner (14% of photo height)
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, imageAreaHeight, photoWidth, bannerHeight);
 
@@ -115,59 +158,80 @@ export async function composePhotoBlob(
   ctx.fillStyle = 'rgba(15, 23, 42, 0.09)';
   ctx.fillRect(0, imageAreaHeight, photoWidth, 2);
 
-  // Banner title & date
+  // Draw school logo on the left and theme logo on the right (80% of banner height)
+  const edgeMarginX = Math.round(bannerHeight * 0.16);
+  const logoTargetH = Math.round(bannerHeight * 0.8);
+  const maxLogoW = Math.round(photoWidth * 0.22);
+  const textGap = Math.round(bannerHeight * 0.16);
+
+  let leftOccupied = 48;
+  let rightOccupied = 48;
+
+  if (showLogos && schoolLogo) {
+    const natW = schoolLogo.naturalWidth || 400;
+    const natH = schoolLogo.naturalHeight || 400;
+    const scale = Math.min(maxLogoW / natW, logoTargetH / natH);
+    const drawW = natW * scale;
+    const drawH = natH * scale;
+    const drawX = edgeMarginX;
+    const drawY = imageAreaHeight + (bannerHeight - drawH) / 2;
+    ctx.drawImage(schoolLogo, drawX, drawY, drawW, drawH);
+    leftOccupied = edgeMarginX + drawW + textGap;
+  }
+
+  if (showLogos && themeLogo) {
+    const natW = themeLogo.naturalWidth || 400;
+    const natH = themeLogo.naturalHeight || 400;
+    const scale = Math.min(maxLogoW / natW, logoTargetH / natH);
+    const drawW = natW * scale;
+    const drawH = natH * scale;
+    const drawX = photoWidth - edgeMarginX - drawW;
+    const drawY = imageAreaHeight + (bannerHeight - drawH) / 2;
+    ctx.drawImage(themeLogo, drawX, drawY, drawW, drawH);
+    rightOccupied = edgeMarginX + drawW + textGap;
+  }
+
+  // Banner title & date centered between logos, auto-shrinking so it never overlaps
   const bannerTitle =
     settings.bannerText.trim() ||
     'Kermesse – École Saint-Pierre – Chemillé-en-Anjou';
   const bannerDate = settings.bannerDate.trim();
 
+  const textLeft = leftOccupied;
+  const textRight = photoWidth - rightOccupied;
+  const maxTextWidth = Math.max(120, textRight - textLeft);
+  const textCenterX = (textLeft + textRight) / 2;
+
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  let fontSize = isLandscape ? 32 : 38;
+  let titleFontSize = isLandscape ? 38 : 42;
   ctx.fillStyle = '#0F172A';
-  while (fontSize > 20) {
-    ctx.font = `700 ${fontSize}px "Bricolage Grotesque", "Plus Jakarta Sans", sans-serif`;
-    if (ctx.measureText(bannerTitle).width <= photoWidth - 96) {
+  while (titleFontSize > 14) {
+    ctx.font = `700 ${titleFontSize}px "Bricolage Grotesque", "Plus Jakarta Sans", sans-serif`;
+    if (ctx.measureText(bannerTitle).width <= maxTextWidth) {
       break;
     }
-    fontSize -= 2;
+    titleFontSize -= 2;
   }
 
-  if (isLandscape) {
-    const titleY = bannerDate
-      ? imageAreaHeight + 42
-      : imageAreaHeight + bannerHeight / 2;
-    ctx.fillText(bannerTitle, photoWidth / 2, titleY, photoWidth - 80);
+  const titleY = bannerDate
+    ? imageAreaHeight + Math.round(bannerHeight * 0.37)
+    : imageAreaHeight + bannerHeight / 2;
+  ctx.fillText(bannerTitle, textCenterX, titleY, maxTextWidth);
 
-    if (bannerDate) {
-      ctx.fillStyle = '#475569';
-      ctx.font =
-        '600 22px "Plus Jakarta Sans", system-ui, -apple-system, sans-serif';
-      ctx.fillText(
-        bannerDate,
-        photoWidth / 2,
-        imageAreaHeight + 84,
-        photoWidth - 80,
-      );
+  if (bannerDate) {
+    let dateFontSize = isLandscape ? 26 : 28;
+    ctx.fillStyle = '#475569';
+    while (dateFontSize > 12) {
+      ctx.font = `600 ${dateFontSize}px "Plus Jakarta Sans", system-ui, -apple-system, sans-serif`;
+      if (ctx.measureText(bannerDate).width <= maxTextWidth) {
+        break;
+      }
+      dateFontSize -= 1;
     }
-  } else {
-    const titleY = bannerDate
-      ? imageAreaHeight + 78
-      : imageAreaHeight + bannerHeight / 2;
-    ctx.fillText(bannerTitle, photoWidth / 2, titleY, photoWidth - 80);
-
-    if (bannerDate) {
-      ctx.fillStyle = '#475569';
-      ctx.font =
-        '600 26px "Plus Jakarta Sans", system-ui, -apple-system, sans-serif';
-      ctx.fillText(
-        bannerDate,
-        photoWidth / 2,
-        imageAreaHeight + 136,
-        photoWidth - 80,
-      );
-    }
+    const dateY = imageAreaHeight + Math.round(bannerHeight * 0.69);
+    ctx.fillText(bannerDate, textCenterX, dateY, maxTextWidth);
   }
 
   return new Promise<Blob>((resolve, reject) => {

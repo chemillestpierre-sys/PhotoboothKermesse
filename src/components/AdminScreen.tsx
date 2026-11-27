@@ -644,6 +644,40 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
                   </button>
                 </div>
               </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-5">
+                <div>
+                  <div className="text-base font-semibold text-slate-900">
+                    Afficher les logos dans le bandeau
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    Logo École Saint-Pierre à gauche et « Graines d’Artistes » à
+                    droite
+                  </div>
+                </div>
+                <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setDraft({...draft, showBannerLogos: true})}
+                    className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-5 py-2 text-sm font-bold transition ${
+                      draft.showBannerLogos !== false
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}>
+                    Oui
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraft({...draft, showBannerLogos: false})}
+                    className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-5 py-2 text-sm font-bold transition ${
+                      draft.showBannerLogos === false
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}>
+                    Non
+                  </button>
+                </div>
+              </div>
             </section>
 
             {/* Caméra & déclenchement */}

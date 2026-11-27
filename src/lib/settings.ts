@@ -15,6 +15,7 @@ export function getDefaultSettings(): PhotoboothSettings {
   return {
     bannerText: 'Kermesse – École Saint-Pierre – Chemillé-en-Anjou',
     bannerDate: formatFrenchDate(new Date()),
+    showBannerLogos: true,
     countdownSeconds: 3,
     previewTimeoutSeconds: 120,
     otherTimeoutSeconds: 30,
@@ -51,6 +52,10 @@ export function loadSettings(): PhotoboothSettings {
           typeof parsed.bannerDate === 'string'
             ? parsed.bannerDate
             : defaults.bannerDate,
+        showBannerLogos:
+          typeof parsed.showBannerLogos === 'boolean'
+            ? parsed.showBannerLogos
+            : defaults.showBannerLogos,
         countdownSeconds:
           captureMode === 'selfie' ? Math.max(3, rawCountdown) : rawCountdown,
         previewTimeoutSeconds:
@@ -103,6 +108,7 @@ export function loadSettings(): PhotoboothSettings {
           typeof parsed.bannerDate === 'string'
             ? parsed.bannerDate
             : defaults.bannerDate,
+        showBannerLogos: defaults.showBannerLogos,
         countdownSeconds:
           typeof parsed.countdownSeconds === 'number' &&
           parsed.countdownSeconds >= 0 &&
