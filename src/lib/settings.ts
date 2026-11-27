@@ -18,8 +18,10 @@ export function getDefaultSettings(): PhotoboothSettings {
     countdownSeconds: 3,
     previewTimeoutSeconds: 120,
     otherTimeoutSeconds: 30,
+    captureMode: 'classic',
     cameraFacing: 'environment',
     cameraDeviceId: '',
+    selfieCameraDeviceId: '',
     photoOrientation: 'landscape',
     defaultPhotoFormat: 'single',
     adminPin: '1234',
@@ -32,6 +34,14 @@ export function loadSettings(): PhotoboothSettings {
     const rawV2 = window.localStorage.getItem(SETTINGS_KEY);
     if (rawV2) {
       const parsed = JSON.parse(rawV2) as Partial<PhotoboothSettings>;
+      const captureMode =
+        parsed.captureMode === 'selfie' ? 'selfie' : 'classic';
+      const rawCountdown =
+        typeof parsed.countdownSeconds === 'number' &&
+        parsed.countdownSeconds >= 0 &&
+        parsed.countdownSeconds <= 15
+          ? parsed.countdownSeconds
+          : defaults.countdownSeconds;
       return {
         bannerText:
           typeof parsed.bannerText === 'string'
@@ -42,11 +52,7 @@ export function loadSettings(): PhotoboothSettings {
             ? parsed.bannerDate
             : defaults.bannerDate,
         countdownSeconds:
-          typeof parsed.countdownSeconds === 'number' &&
-          parsed.countdownSeconds >= 0 &&
-          parsed.countdownSeconds <= 15
-            ? parsed.countdownSeconds
-            : defaults.countdownSeconds,
+          captureMode === 'selfie' ? Math.max(3, rawCountdown) : rawCountdown,
         previewTimeoutSeconds:
           typeof parsed.previewTimeoutSeconds === 'number' &&
           parsed.previewTimeoutSeconds >= 10 &&
@@ -59,11 +65,16 @@ export function loadSettings(): PhotoboothSettings {
           parsed.otherTimeoutSeconds <= 300
             ? parsed.otherTimeoutSeconds
             : defaults.otherTimeoutSeconds,
+        captureMode,
         cameraFacing:
           parsed.cameraFacing === 'user' ? 'user' : 'environment',
         cameraDeviceId:
           typeof parsed.cameraDeviceId === 'string'
             ? parsed.cameraDeviceId
+            : '',
+        selfieCameraDeviceId:
+          typeof parsed.selfieCameraDeviceId === 'string'
+            ? parsed.selfieCameraDeviceId
             : '',
         photoOrientation:
           parsed.photoOrientation === 'portrait' ? 'portrait' : 'landscape',
@@ -110,8 +121,10 @@ export function loadSettings(): PhotoboothSettings {
           parsed.otherTimeoutSeconds <= 300
             ? parsed.otherTimeoutSeconds
             : defaults.otherTimeoutSeconds,
+        captureMode: 'classic',
         cameraFacing: 'environment',
         cameraDeviceId: '',
+        selfieCameraDeviceId: '',
         photoOrientation: 'landscape',
         defaultPhotoFormat: 'single',
         adminPin:

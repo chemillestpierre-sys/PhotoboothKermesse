@@ -3,6 +3,7 @@ import {PhotoboothSettings} from '../types';
 export interface ViewfinderCropRects {
   videoRect: DOMRect;
   viewfinderRect: DOMRect;
+  mirroredPreview?: boolean;
 }
 
 export async function composePhotoBlob(
@@ -51,14 +52,16 @@ export async function composePhotoBlob(
     cropRects.viewfinderRect.width > 0 &&
     cropRects.viewfinderRect.height > 0
   ) {
-    const {videoRect, viewfinderRect} = cropRects;
+    const {videoRect, viewfinderRect, mirroredPreview} = cropRects;
     const scale = Math.max(videoRect.width / vw, videoRect.height / vh);
     const renderedW = vw * scale;
     const renderedH = vh * scale;
     const renderedLeft = videoRect.left + (videoRect.width - renderedW) / 2;
     const renderedTop = videoRect.top + (videoRect.height - renderedH) / 2;
 
-    const rawSx = (viewfinderRect.left - renderedLeft) / scale;
+    const rawSx = mirroredPreview
+      ? (renderedLeft + renderedW - viewfinderRect.right) / scale
+      : (viewfinderRect.left - renderedLeft) / scale;
     const rawSy = (viewfinderRect.top - renderedTop) / scale;
     const rawSw = viewfinderRect.width / scale;
     const rawSh = viewfinderRect.height / scale;

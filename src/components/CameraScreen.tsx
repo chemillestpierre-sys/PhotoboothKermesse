@@ -108,6 +108,12 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     }
   }, []);
 
+  const isSelfie = settings.captureMode === 'selfie';
+  const activeDeviceId = isSelfie
+    ? settings.selfieCameraDeviceId
+    : settings.cameraDeviceId;
+  const activeFacing = isSelfie ? 'user' : settings.cameraFacing;
+
   const startCamera = useCallback(async () => {
     stopStream();
     setIsLoading(true);
@@ -134,11 +140,11 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
       let stream: MediaStream;
       let notice: string | null = null;
 
-      if (settings.cameraDeviceId) {
+      if (activeDeviceId) {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
-              deviceId: {exact: settings.cameraDeviceId},
+              deviceId: {exact: activeDeviceId},
               ...highRes,
             },
             audio: false,
@@ -151,7 +157,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
           ) {
             stream = await navigator.mediaDevices.getUserMedia({
               video: {
-                facingMode: {ideal: settings.cameraFacing},
+                facingMode: {ideal: activeFacing},
                 ...highRes,
               },
               audio: false,
@@ -162,7 +168,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
             throw err;
           }
         }
-      } else if (settings.cameraFacing === 'environment') {
+      } else if (activeFacing === 'environment') {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
@@ -190,7 +196,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
-              facingMode: {ideal: 'user'},
+              facingMode: {exact: 'user'},
               ...highRes,
             },
             audio: false,
@@ -201,21 +207,33 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
             errName === 'OverconstrainedError' ||
             errName === 'NotFoundError'
           ) {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: highRes,
-              audio: false,
-            });
-            notice = 'Caméra frontale absente : caméra disponible utilisée.';
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                  facingMode: {ideal: 'user'},
+                  ...highRes,
+                },
+                audio: false,
+              });
+            } catch {
+              stream = await navigator.mediaDevices.getUserMedia({
+                video: highRes,
+                audio: false,
+              });
+              notice = 'Caméra frontale absente : caméra disponible utilisée.';
+            }
           } else {
             throw err;
           }
         }
       }
 
-      if (!notice && !settings.cameraDeviceId && settings.cameraFacing === 'environment') {
+      if (!notice && !activeDeviceId) {
         const trackFacing = stream.getVideoTracks()[0]?.getSettings().facingMode;
-        if (trackFacing === 'user') {
+        if (activeFacing === 'environment' && trackFacing === 'user') {
           notice = 'Caméra arrière absente : caméra disponible utilisée.';
+        } else if (activeFacing === 'user' && trackFacing === 'environment') {
+          notice = 'Caméra frontale absente : caméra disponible utilisée.';
         }
       }
 
@@ -241,7 +259,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         setErrorKind('permission');
       }
     }
-  }, [settings.cameraDeviceId, settings.cameraFacing, stopStream]);
+  }, [activeDeviceId, activeFacing, stopStream]);
 
   useEffect(() => {
     void startCamera();
@@ -270,6 +288,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         ? {
             videoRect: video.getBoundingClientRect(),
             viewfinderRect: viewfinderRef.current.getBoundingClientRect(),
+            mirroredPreview: isSelfie,
           }
         : null;
       composePhotoBlob(video, settings, cropRects)
@@ -285,20 +304,23 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     } else {
       setIsCapturing(false);
     }
-  }, [onCaptured, settings, stopStream]);
+  }, [isSelfie, onCaptured, settings, stopStream]);
 
   const handleStartCountdown = () => {
     if (!isReady || countdown !== null || isCapturing) return;
     unlockAudio();
 
-    if (settings.countdownSeconds <= 0) {
+    const effectiveCountdown = isSelfie
+      ? Math.max(3, settings.countdownSeconds)
+      : settings.countdownSeconds;
+
+    if (effectiveCountdown <= 0) {
       captureNow();
       return;
     }
 
-    const total = settings.countdownSeconds;
-    setCountdown(total);
-    playCountdownBeep(total === 1);
+    setCountdown(effectiveCountdown);
+    playCountdownBeep(effectiveCountdown === 1);
   };
 
   useEffect(() => {
@@ -362,7 +384,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
 
   return (
     <main className="app-viewport relative flex flex-col justify-between bg-slate-950 select-none">
-      {/* Fullscreen live video feed (never mirrored) */}
+      {/* Live video feed: mirrored in Selfie mode preview only, never on saved photo */}
       <video
         ref={videoRef}
         playsInline
@@ -373,8 +395,8 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
           updateViewfinderLayout();
         }}
         className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
-          isReady && !errorKind ? 'opacity-100' : 'opacity-0'
-        }`}
+          isSelfie ? '-scale-x-100' : ''
+        } ${isReady && !errorKind ? 'opacity-100' : 'opacity-0'}`}
       />
 
       {/* Top bar: Back button + discreet rotation / fallback notices */}
@@ -510,6 +532,35 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         )}
       </div>
 
+      {/* Selfie mode: big centered child-friendly trigger button */}
+      {isSelfie &&
+        isReady &&
+        !errorKind &&
+        countdown === null &&
+        !isCapturing && (
+          <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center p-4">
+            <button
+              type="button"
+              onClick={handleStartCountdown}
+              style={{
+                fontSize: 'clamp(1.5rem, 5vmin, 2.75rem)',
+                padding:
+                  'clamp(1.1rem, 3.2dvh, 2rem) clamp(2.2rem, 8vw, 4.75rem)',
+              }}
+              className="pointer-events-auto flex items-center justify-center gap-[clamp(0.75rem,2.4vw,1.25rem)] rounded-[2.25rem] bg-[#FF5A36] font-display font-extrabold text-white shadow-[0_10px_0_0_#C93B1D,0_20px_40px_rgba(0,0,0,0.45)] transition-all hover:bg-[#F34F2B] active:translate-y-2 active:shadow-[0_3px_0_0_#C93B1D] whitespace-nowrap">
+              <Camera
+                style={{
+                  width: 'clamp(1.75rem, 5vmin, 3rem)',
+                  height: 'clamp(1.75rem, 5vmin, 3rem)',
+                }}
+                className="shrink-0"
+                strokeWidth={2.6}
+              />
+              <span>C’est parti !</span>
+            </button>
+          </div>
+        )}
+
       {/* Animated big countdown overlay */}
       <AnimatePresence mode="wait">
         {countdown !== null && countdown > 0 && (
@@ -519,17 +570,29 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
             animate={{scale: 1, opacity: 1}}
             exit={{scale: 1.35, opacity: 0}}
             transition={{duration: 0.32, ease: [0.16, 1, 0.3, 1]}}
-            className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-slate-950/20">
-            <span
-              style={{fontSize: 'clamp(5rem, 28vmin, 14rem)'}}
-              className="font-display leading-none font-extrabold text-white drop-shadow-[0_12px_32px_rgba(0,0,0,0.6)] tabular-nums">
-              {countdown}
-            </span>
+            className={`pointer-events-none fixed inset-0 z-30 flex items-center justify-center ${
+              isSelfie ? 'bg-slate-950/35' : 'bg-slate-950/20'
+            }`}>
+            {isSelfie ? (
+              <div className="flex h-[clamp(11rem,44vmin,22rem)] w-[clamp(11rem,44vmin,22rem)] items-center justify-center rounded-full bg-slate-950/45 ring-4 ring-white/40 backdrop-blur-sm shadow-2xl">
+                <span
+                  style={{fontSize: 'clamp(6.5rem, 34vmin, 16rem)'}}
+                  className="font-display leading-none font-extrabold text-white drop-shadow-[0_12px_32px_rgba(0,0,0,0.65)] tabular-nums">
+                  {countdown}
+                </span>
+              </div>
+            ) : (
+              <span
+                style={{fontSize: 'clamp(5rem, 28vmin, 14rem)'}}
+                className="font-display leading-none font-extrabold text-white drop-shadow-[0_12px_32px_rgba(0,0,0,0.6)] tabular-nums">
+                {countdown}
+              </span>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Bottom primary CTA anchored in thumb zone */}
+      {/* Bottom primary CTA anchored in thumb zone (Classic mode) */}
       <div
         style={{
           paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
@@ -537,27 +600,31 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
           paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
         }}
         className="relative z-20 flex shrink-0 justify-center pt-1.5">
-        {isReady && !errorKind && countdown === null && !isCapturing && (
-          <button
-            type="button"
-            onClick={handleStartCountdown}
-            style={{
-              fontSize: 'clamp(1.15rem, 3.6vmin, 2.2rem)',
-              padding:
-                'clamp(0.65rem, 2dvh, 1.25rem) clamp(1.6rem, 6vw, 3.5rem)',
-            }}
-            className="flex items-center justify-center gap-[clamp(0.6rem,2vw,1rem)] rounded-[1.75rem] bg-[#FF5A36] font-extrabold text-white shadow-[0_8px_0_0_#C93B1D] transition-all hover:bg-[#F34F2B] active:translate-y-1.5 active:shadow-[0_2px_0_0_#C93B1D] sm:rounded-[2rem] whitespace-nowrap">
-            <Camera
+        {!isSelfie &&
+          isReady &&
+          !errorKind &&
+          countdown === null &&
+          !isCapturing && (
+            <button
+              type="button"
+              onClick={handleStartCountdown}
               style={{
-                width: 'clamp(1.4rem, 3.8vmin, 2.4rem)',
-                height: 'clamp(1.4rem, 3.8vmin, 2.4rem)',
+                fontSize: 'clamp(1.15rem, 3.6vmin, 2.2rem)',
+                padding:
+                  'clamp(0.65rem, 2dvh, 1.25rem) clamp(1.6rem, 6vw, 3.5rem)',
               }}
-              className="shrink-0"
-              strokeWidth={2.5}
-            />
-            <span>C’est parti !</span>
-          </button>
-        )}
+              className="flex items-center justify-center gap-[clamp(0.6rem,2vw,1rem)] rounded-[1.75rem] bg-[#FF5A36] font-extrabold text-white shadow-[0_8px_0_0_#C93B1D] transition-all hover:bg-[#F34F2B] active:translate-y-1.5 active:shadow-[0_2px_0_0_#C93B1D] sm:rounded-[2rem] whitespace-nowrap">
+              <Camera
+                style={{
+                  width: 'clamp(1.4rem, 3.8vmin, 2.4rem)',
+                  height: 'clamp(1.4rem, 3.8vmin, 2.4rem)',
+                }}
+                className="shrink-0"
+                strokeWidth={2.5}
+              />
+              <span>C’est parti !</span>
+            </button>
+          )}
       </div>
 
       {/* Fullscreen white flash overlay */}

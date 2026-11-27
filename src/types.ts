@@ -6,14 +6,18 @@ export type PhotoOrientation = 'landscape' | 'portrait';
 
 export type PrintFormat = 'single' | 'miniatures4';
 
+export type CaptureMode = 'classic' | 'selfie';
+
 export interface PhotoboothSettings {
   bannerText: string;
   bannerDate: string;
   countdownSeconds: number;
   previewTimeoutSeconds: number;
   otherTimeoutSeconds: number;
+  captureMode: CaptureMode;
   cameraFacing: CameraFacing;
   cameraDeviceId: string;
+  selfieCameraDeviceId: string;
   photoOrientation: PhotoOrientation;
   defaultPhotoFormat: PrintFormat;
   adminPin: string;

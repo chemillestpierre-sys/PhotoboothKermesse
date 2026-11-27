@@ -12,6 +12,7 @@ import {
   RefreshCw,
   RotateCcw,
   Settings,
+  Smile,
   Smartphone,
   Square,
   Trash2,
@@ -27,7 +28,12 @@ import {
 } from '../lib/db';
 import {formatFrenchDate, getDefaultSettings} from '../lib/settings';
 import {exportPhotosAsZip} from '../lib/zipExport';
-import {PhotoRecord, PhotoboothSettings, PrintFormat} from '../types';
+import {
+  CaptureMode,
+  PhotoRecord,
+  PhotoboothSettings,
+  PrintFormat,
+} from '../types';
 import {PWAInstallButton} from './PWAInstallButton';
 
 interface AdminScreenProps {
@@ -129,7 +135,12 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
       if (requestPermission && !hasLabels && navigator.mediaDevices.getUserMedia) {
         try {
           const tempStream = await navigator.mediaDevices.getUserMedia({
-            video: {facingMode: {ideal: 'environment'}},
+            video: {
+              facingMode: {
+                ideal:
+                  draft.captureMode === 'selfie' ? 'user' : 'environment',
+              },
+            },
             audio: false,
           });
           tempStream.getTracks().forEach((t) => t.stop());
@@ -148,7 +159,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
     } finally {
       setLoadingCameras(false);
     }
-  }, []);
+  }, [draft.captureMode]);
 
   useEffect(() => {
     if (activeTab === 'settings') {
@@ -237,14 +248,37 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
     }
   };
 
+  const handleSelectCaptureMode = (mode: CaptureMode) => {
+    const next: PhotoboothSettings = {
+      ...draft,
+      captureMode: mode,
+      countdownSeconds:
+        mode === 'selfie'
+          ? Math.max(3, draft.countdownSeconds)
+          : draft.countdownSeconds,
+    };
+    setDraft(next);
+    onUpdateSettings(next);
+    setSavedNotice(true);
+    window.setTimeout(() => setSavedNotice(false), 2500);
+  };
+
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     if (!/^\d{4,8}$/.test(draft.adminPin)) {
       setPinError('Le code PIN doit contenir entre 4 et 8 chiffres.');
       return;
     }
+    const normalized: PhotoboothSettings = {
+      ...draft,
+      countdownSeconds:
+        draft.captureMode === 'selfie'
+          ? Math.max(3, draft.countdownSeconds)
+          : draft.countdownSeconds,
+    };
     setPinError('');
-    onUpdateSettings(draft);
+    setDraft(normalized);
+    onUpdateSettings(normalized);
     setSavedNotice(true);
     window.setTimeout(() => setSavedNotice(false), 2500);
   };
@@ -282,6 +316,21 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          {/* Active capture mode indicator */}
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold sm:px-3.5 sm:text-sm">
+            {settings.captureMode === 'selfie' ? (
+              <Smile className="h-4 w-4 shrink-0 text-[#FF5A36] sm:h-5 sm:w-5" />
+            ) : (
+              <Camera className="h-4 w-4 shrink-0 text-sky-600 sm:h-5 sm:w-5" />
+            )}
+            <span className="text-slate-700">
+              Mode actuel :{' '}
+              <strong className="text-slate-900">
+                {settings.captureMode === 'selfie' ? 'Selfie' : 'Classique'}
+              </strong>
+            </span>
+          </div>
+
           {/* Installed standalone/fullscreen mode indicator */}
           <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold sm:px-3.5 sm:text-sm">
             <Smartphone
@@ -603,6 +652,44 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
                 Caméra et compte à rebours
               </h2>
 
+              {/* Mode de prise de vue */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                <div>
+                  <div className="text-base font-semibold text-slate-900">
+                    Mode de prise de vue
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    {draft.captureMode === 'selfie'
+                      ? 'Tablette sur pied : caméra frontale, aperçu miroir, gros bouton centré'
+                      : 'Tenu par un bénévole : caméra arrière sans miroir'}
+                  </div>
+                </div>
+                <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectCaptureMode('classic')}
+                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                      draft.captureMode !== 'selfie'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}>
+                    <Camera className="h-4 w-4" />
+                    <span>Classique</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectCaptureMode('selfie')}
+                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                      draft.captureMode === 'selfie'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}>
+                    <Smile className="h-4 w-4" />
+                    <span>Selfie</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Orientation de la photo */}
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
@@ -684,177 +771,217 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
                 </div>
               </div>
 
-              {/* Camera facing */}
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <div className="text-base font-semibold text-slate-900">
-                    Caméra par défaut
-                  </div>
-                  <div className="text-sm text-slate-500">
-                    Caméra arrière recommandée pour photographier les familles
-                  </div>
-                </div>
-                <div className="inline-flex rounded-2xl bg-slate-100 p-1">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        cameraFacing: 'environment',
-                        cameraDeviceId: '',
-                      })
-                    }
-                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
-                      draft.cameraFacing === 'environment'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600'
-                    }`}>
-                    <Camera className="h-4 w-4" />
-                    <span>Arrière</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        cameraFacing: 'user',
-                        cameraDeviceId: '',
-                      })
-                    }
-                    className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
-                      draft.cameraFacing === 'user'
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600'
-                    }`}>
-                    <Camera className="h-4 w-4" />
-                    <span>Frontale</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Specific camera device selector (for multi-lens rear cameras) */}
-              <div className="border-t border-slate-100 pt-5 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Camera facing (Classic mode) or front camera info (Selfie mode) */}
+              {draft.captureMode !== 'selfie' ? (
+                <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <div className="text-base font-semibold text-slate-900">
-                      Objectif / caméra précise
+                      Caméra par défaut (mode Classique)
                     </div>
                     <div className="text-sm text-slate-500">
-                      Utile si l’appareil possède plusieurs caméras arrière
-                      (grand-angle, ultra grand-angle…)
+                      Caméra arrière recommandée pour photographier les familles
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void refreshCameras(true)}
-                    disabled={loadingCameras}
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-slate-100 px-3.5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200 active:scale-95 disabled:opacity-50">
-                    <RefreshCw
-                      className={`h-4 w-4 ${loadingCameras ? 'animate-spin' : ''}`}
-                    />
-                    <span>Détecter les caméras</span>
-                  </button>
+                  <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          cameraFacing: 'environment',
+                          cameraDeviceId: '',
+                        })
+                      }
+                      className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                        draft.cameraFacing === 'environment'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-600'
+                      }`}>
+                      <Camera className="h-4 w-4" />
+                      <span>Arrière</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          cameraFacing: 'user',
+                          cameraDeviceId: '',
+                        })
+                      }
+                      className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                        draft.cameraFacing === 'user'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-600'
+                      }`}>
+                      <Camera className="h-4 w-4" />
+                      <span>Frontale</span>
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <div className="text-base font-semibold text-slate-900">
+                      Caméra utilisée (mode Selfie)
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      Caméra frontale sélectionnée automatiquement pour le mode
+                      Selfie
+                    </div>
+                  </div>
+                  <span className="inline-flex min-h-[40px] items-center gap-2 rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-800">
+                    <Camera className="h-4 w-4" />
+                    <span>Frontale</span>
+                  </span>
+                </div>
+              )}
 
-                {cameraListError && (
-                  <p className="text-sm font-medium text-amber-700">
-                    {cameraListError}
-                  </p>
-                )}
+              {/* Specific camera device selector (stored separately per mode) */}
+              {(() => {
+                const isSelfieMode = draft.captureMode === 'selfie';
+                const currentDeviceId = isSelfieMode
+                  ? draft.selfieCameraDeviceId
+                  : draft.cameraDeviceId;
+                const setDeviceIdForMode = (deviceId: string) =>
+                  setDraft(
+                    isSelfieMode
+                      ? {...draft, selfieCameraDeviceId: deviceId}
+                      : {...draft, cameraDeviceId: deviceId},
+                  );
 
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => setDraft({...draft, cameraDeviceId: ''})}
-                    className={`flex w-full min-h-[48px] items-center justify-between rounded-2xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
-                      draft.cameraDeviceId === ''
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                    }`}>
-                    <span>
-                      Automatique (
-                      {draft.cameraFacing === 'environment'
-                        ? 'caméra arrière'
-                        : 'caméra frontale'}
-                      )
-                    </span>
-                    {draft.cameraDeviceId === '' && (
-                      <Check className="h-4 w-4 shrink-0" />
-                    )}
-                  </button>
-
-                  {availableCameras.map((cam, index) => {
-                    const selected = draft.cameraDeviceId === cam.deviceId;
-                    const label =
-                      cam.label.trim() || `Caméra détectée ${index + 1}`;
-                    return (
+                return (
+                  <div className="border-t border-slate-100 pt-5 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-base font-semibold text-slate-900">
+                          Objectif / caméra précise (mode{' '}
+                          {isSelfieMode ? 'Selfie' : 'Classique'})
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          Choix mémorisé séparément pour le mode{' '}
+                          {isSelfieMode ? 'Selfie' : 'Classique'}
+                        </div>
+                      </div>
                       <button
-                        key={cam.deviceId || `cam-${index}`}
                         type="button"
-                        onClick={() =>
-                          setDraft({...draft, cameraDeviceId: cam.deviceId})
-                        }
-                        className={`flex w-full min-h-[48px] items-center justify-between gap-3 rounded-2xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
-                          selected
+                        onClick={() => void refreshCameras(true)}
+                        disabled={loadingCameras}
+                        className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-slate-100 px-3.5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200 active:scale-95 disabled:opacity-50">
+                        <RefreshCw
+                          className={`h-4 w-4 ${loadingCameras ? 'animate-spin' : ''}`}
+                        />
+                        <span>Détecter les caméras</span>
+                      </button>
+                    </div>
+
+                    {cameraListError && (
+                      <p className="text-sm font-medium text-amber-700">
+                        {cameraListError}
+                      </p>
+                    )}
+
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setDeviceIdForMode('')}
+                        className={`flex w-full min-h-[48px] items-center justify-between rounded-2xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
+                          currentDeviceId === ''
                             ? 'border-slate-900 bg-slate-900 text-white'
                             : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                         }`}>
-                        <span className="truncate">{label}</span>
-                        {selected && <Check className="h-4 w-4 shrink-0" />}
+                        <span>
+                          Automatique (
+                          {isSelfieMode || draft.cameraFacing === 'user'
+                            ? 'caméra frontale'
+                            : 'caméra arrière'}
+                          )
+                        </span>
+                        {currentDeviceId === '' && (
+                          <Check className="h-4 w-4 shrink-0" />
+                        )}
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
 
-              {/* Countdown duration (including 0s immediate) */}
-              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-5">
-                <div>
-                  <div className="text-base font-semibold text-slate-900">
-                    Durée du compte à rebours
+                      {availableCameras.map((cam, index) => {
+                        const selected = currentDeviceId === cam.deviceId;
+                        const label =
+                          cam.label.trim() || `Caméra détectée ${index + 1}`;
+                        return (
+                          <button
+                            key={cam.deviceId || `cam-${index}`}
+                            type="button"
+                            onClick={() => setDeviceIdForMode(cam.deviceId)}
+                            className={`flex w-full min-h-[48px] items-center justify-between gap-3 rounded-2xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
+                              selected
+                                ? 'border-slate-900 bg-slate-900 text-white'
+                                : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                            }`}>
+                            <span className="truncate">{label}</span>
+                            {selected && <Check className="h-4 w-4 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="text-sm text-slate-500">
-                    0 s = déclenchement immédiat sans attente (défaut : 3 s)
+                );
+              })()}
+
+              {/* Countdown duration (0s allowed in Classic, min 3s in Selfie) */}
+              {(() => {
+                const minCountdown = draft.captureMode === 'selfie' ? 3 : 0;
+                return (
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-5">
+                    <div>
+                      <div className="text-base font-semibold text-slate-900">
+                        Durée du compte à rebours
+                      </div>
+                      <div className="text-sm text-slate-500">
+                        {draft.captureMode === 'selfie'
+                          ? 'Minimum 3 s en mode Selfie pour laisser le temps de prendre la pose (défaut : 3 s)'
+                          : '0 s = déclenchement immédiat sans attente (défaut : 3 s)'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        disabled={draft.countdownSeconds <= minCountdown}
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            countdownSeconds: Math.max(
+                              minCountdown,
+                              draft.countdownSeconds - 1,
+                            ),
+                          })
+                        }
+                        aria-label="Diminuer"
+                        className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 hover:bg-slate-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40">
+                        <Minus className="h-5 w-5" />
+                      </button>
+                      <span className="min-w-[6.5rem] text-center font-display text-xl font-bold tabular-nums">
+                        {draft.countdownSeconds === 0
+                          ? '0 s (immédiat)'
+                          : `${draft.countdownSeconds} s`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            countdownSeconds: Math.min(
+                              10,
+                              draft.countdownSeconds + 1,
+                            ),
+                          })
+                        }
+                        aria-label="Augmenter"
+                        className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 hover:bg-slate-200 active:scale-95">
+                        <Plus className="h-5 w-5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        countdownSeconds: Math.max(
-                          0,
-                          draft.countdownSeconds - 1,
-                        ),
-                      })
-                    }
-                    aria-label="Diminuer"
-                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 hover:bg-slate-200 active:scale-95">
-                    <Minus className="h-5 w-5" />
-                  </button>
-                  <span className="min-w-[6.5rem] text-center font-display text-xl font-bold tabular-nums">
-                    {draft.countdownSeconds === 0
-                      ? '0 s (immédiat)'
-                      : `${draft.countdownSeconds} s`}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        countdownSeconds: Math.min(
-                          10,
-                          draft.countdownSeconds + 1,
-                        ),
-                      })
-                    }
-                    aria-label="Augmenter"
-                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 hover:bg-slate-200 active:scale-95">
-                    <Plus className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
+                );
+              })()}
             </section>
 
             {/* Délais d'inactivité & sécurité */}
